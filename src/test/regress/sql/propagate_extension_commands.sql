@@ -243,7 +243,19 @@ BEGIN;
 	CREATE TABLE t3 (a int, b test_type_3);
 	SELECT create_reference_table('t3');
 
+	-- Distribute an extension function
+	SELECT create_distributed_function('seg_in(cstring)');
 COMMIT;
+
+-- Check the pg_dist_object
+SELECT pg_proc.proname as DistributedFunction
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and pg_proc.oid = citus.pg_dist_object.objid;
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and pg_proc.oid = citus.pg_dist_object.objid;
+$$);
 
 -- add the node back
 SELECT 1 from master_add_node('localhost', :worker_2_port);
@@ -252,5 +264,24 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
 SELECT count(*) FROM citus.pg_dist_object WHERE objid IN (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname IN ('seg', 'isn')$$);
 
+-- Check the pg_dist_object on the both nodes
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and pg_proc.oid = citus.pg_dist_object.objid;
+$$);
+
+DROP EXTENSION seg CASCADE;
+
+-- Recheck the pg_dist_object
+SELECT pg_proc.proname as DistributedFunction
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and pg_proc.oid = citus.pg_dist_object.objid;
+
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and pg_proc.oid = citus.pg_dist_object.objid;
+$$);
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;

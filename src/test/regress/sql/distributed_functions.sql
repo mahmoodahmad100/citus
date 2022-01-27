@@ -292,6 +292,10 @@ AS 'select $1 <> $2;' -- I know, this is not an add, but the output will tell us
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','012345689ab');$$) ORDER BY 1,2;
 
+--
+-- Test distributed functions of extension.
+--
+
 -- distributed functions should not be allowed to depend on an extension, also functions
 -- that depend on an extension should not be allowed to be distributed.
 ALTER FUNCTION eq(macaddr,macaddr) DEPENDS ON EXTENSION citus;
