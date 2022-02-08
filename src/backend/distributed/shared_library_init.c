@@ -23,6 +23,7 @@
 
 #include "safe_lib.h"
 
+#include "catalog/pg_authid.h"
 #include "citus_version.h"
 #include "commands/explain.h"
 #include "common/string.h"
@@ -84,12 +85,14 @@
 #include "libpq/auth.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
+#include "replication/walsender.h"
 #include "storage/ipc.h"
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/syscache.h"
 #include "utils/varlena.h"
 
 #include "columnar/mod.h"
@@ -105,6 +108,9 @@ static int ReplicationModel = REPLICATION_MODEL_STREAMING;
 
 /* we override the application_name assign_hook and keep a pointer to the old one */
 static GucStringAssignHook OldApplicationNameAssignHook = NULL;
+
+/* number of connections to reserved for Citus */
+static int ReservedCitusInternalBackends = 0;
 
 
 void _PG_init(void);
@@ -135,6 +141,7 @@ static const char * LocalPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
 static void CitusAuthHook(Port *port, int status);
+static bool IsSuperuser(char *userName);
 
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
@@ -1113,6 +1120,21 @@ RegisterCitusConfigVariables(void)
 		HideShardsFromAppNamePrefixesCheckHook,
 		HideShardsFromAppNamePrefixesAssignHook,
 		NULL);
+
+	DefineCustomIntVariable(
+		"citus.internal_reserved_connections",
+		gettext_noop("Sets the number of connections to reserve for Citus"),
+		gettext_noop("To ensure that a Citus cluster has a sufficient number of "
+					 "connection slots to serve queries internally, it can be "
+					 "useful to reserve part of max_connections for Citus internal "
+					 "connections. This limit is additive to "
+					 "superuser_reserved_connections, which separately reserves "
+					 "connections for non-replication superusers."),
+		&ReservedCitusInternalBackends,
+		0, 0, INT_MAX,
+		PGC_POSTMASTER,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.isolation_test_session_process_id",
@@ -2132,6 +2154,21 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 static void
 CitusAuthHook(Port *port, int status)
 {
+	/*
+	 * Limit non-superuser client connections if citus.internal_reserved_connections
+	 * is set.
+	 */
+	if (!IsSuperuser(port->user_name) &&
+		ReservedCitusInternalBackends > 0 &&
+		!IsCitusInternalBackend() &&
+		!HaveNFreeProcs(ReservedBackends + ReservedCitusInternalBackends))
+	{
+		ereport(FATAL,
+				(errcode(ERRCODE_TOO_MANY_CONNECTIONS),
+				 errmsg(
+					 "remaining connection slots are reserved for non-replication superuser connections")));
+	}
+
 	/* let other authentication hooks to kick in first */
 	if (original_client_auth_hook)
 	{
@@ -2140,4 +2177,32 @@ CitusAuthHook(Port *port, int status)
 
 	RegisterClientBackendCounterDecrement();
 	IncrementClientBackendCounter();
+}
+
+
+/*
+ * IsSuperuser returns whether the role with the given name is superuser.
+ */
+static bool
+IsSuperuser(char *roleName)
+{
+	if (roleName == NULL)
+	{
+		return false;
+	}
+
+	HeapTuple roleTuple = SearchSysCache1(AUTHNAME, CStringGetDatum(roleName));
+	if (!HeapTupleIsValid(roleTuple))
+	{
+		ereport(FATAL,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				 errmsg("role \"%s\" does not exist", roleName)));
+	}
+
+	Form_pg_authid rform = (Form_pg_authid) GETSTRUCT(roleTuple);
+	bool isSuperuser = rform->rolsuper;
+
+	ReleaseSysCache(roleTuple);
+
+	return isSuperuser;
 }
