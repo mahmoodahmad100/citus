@@ -2154,19 +2154,29 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 static void
 CitusAuthHook(Port *port, int status)
 {
-	/*
-	 * Limit non-superuser client connections if citus.internal_reserved_connections
-	 * is set.
-	 */
-	if (!IsSuperuser(port->user_name) &&
-		ReservedCitusInternalBackends > 0 &&
-		!IsCitusInternalBackend() &&
-		!HaveNFreeProcs(ReservedBackends + ReservedCitusInternalBackends))
+	if (!IsCitusInternalBackend())
 	{
-		ereport(FATAL,
-				(errcode(ERRCODE_TOO_MANY_CONNECTIONS),
-				 errmsg(
-					 "remaining connection slots are reserved for non-replication superuser connections")));
+		int maxClientConnections =
+			MaxConnections - ReservedBackends - ReservedCitusInternalBackends;
+
+		/*
+		 * Limit non-superuser client connections if citus.internal_reserved_connections
+		 * is set.
+		 */
+		if (ReservedCitusInternalBackends > 0 &&
+			!IsSuperuser(port->user_name) &&
+			GetAllActiveClientBackendCount() + 1 > maxClientConnections)
+		{
+			ereport(FATAL, (errcode(ERRCODE_TOO_MANY_CONNECTIONS),
+							errmsg("remaining connection slots are reserved for "
+								   "non-replication superuser connections"),
+							errdetail("the server is configured to accept up to %d "
+									  "regular client connections",
+									  maxClientConnections)));
+		}
+
+		RegisterClientBackendCounterDecrement();
+		IncrementClientBackendCounter();
 	}
 
 	/* let other authentication hooks to kick in first */
@@ -2174,9 +2184,6 @@ CitusAuthHook(Port *port, int status)
 	{
 		original_client_auth_hook(port, status);
 	}
-
-	RegisterClientBackendCounterDecrement();
-	IncrementClientBackendCounter();
 }
 
 
