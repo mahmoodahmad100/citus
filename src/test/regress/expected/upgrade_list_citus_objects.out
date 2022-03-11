@@ -146,6 +146,7 @@ ORDER BY 1;
  function fix_pre_citus10_partitioned_table_constraint_names()
  function fix_pre_citus10_partitioned_table_constraint_names(regclass)
  function get_all_active_transactions()
+ function get_cluster_clock()
  function get_colocated_shard_array(bigint)
  function get_colocated_table_array(regclass)
  function get_current_transaction_id()
@@ -201,6 +202,7 @@ ORDER BY 1;
  function run_command_on_placements(regclass,text,boolean)
  function run_command_on_shards(regclass,text,boolean)
  function run_command_on_workers(text,boolean)
+ function set_transaction_id_clock_value(bigint)
  function shard_name(regclass,bigint)
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer,boolean)
@@ -275,5 +277,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(259 rows)
+(261 rows)
 

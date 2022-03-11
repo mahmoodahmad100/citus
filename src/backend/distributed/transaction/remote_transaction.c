@@ -19,6 +19,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
+#include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
@@ -31,7 +32,7 @@
 #include "utils/hsearch.h"
 
 
-#define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u"
+#define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u_"UINT64_FORMAT
 
 
 static char * AssignDistributedTransactionIdCommand(void);
@@ -50,6 +51,9 @@ static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection
 
 static void Assign2PCIdentifier(MultiConnection *connection);
 
+static void SetTransactionClusterClock(List *connectionList);
+
+bool EnableGlobalClock = false;
 
 /*
  * StartRemoteTransactionBegin initiates beginning the remote transaction in
@@ -793,14 +797,15 @@ CoordinatedRemoteTransactionsPrepare(void)
 {
 	dlist_iter iter;
 	List *connectionList = NIL;
+	MultiConnection *connection = NULL;
 
 	/* issue PREPARE TRANSACTION; to all relevant remote nodes */
 
 	/* asynchronously send PREPARE */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
-		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
-													  iter.cur);
+		connection = dlist_container(MultiConnection, transactionNode,
+									 iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
@@ -818,9 +823,19 @@ CoordinatedRemoteTransactionsPrepare(void)
 		 */
 		if (ConnectionModifiedPlacement(connection))
 		{
-			StartRemoteTransactionPrepare(connection);
 			connectionList = lappend(connectionList, connection);
 		}
+	}
+
+	/* If enabled, get the transaction clock value */
+	if (EnableGlobalClock)
+	{
+		SetTransactionClusterClock(connectionList);
+	}
+
+	foreach_ptr(connection, connectionList)
+	{
+		StartRemoteTransactionPrepare(connection);
 	}
 
 	bool raiseInterrupts = true;
@@ -829,8 +844,8 @@ CoordinatedRemoteTransactionsPrepare(void)
 	/* Wait for result */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
-		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
-													  iter.cur);
+		connection = dlist_container(MultiConnection, transactionNode,
+									 iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		if (transaction->transactionState != REMOTE_TRANS_PREPARING)
@@ -1321,7 +1336,7 @@ CheckRemoteTransactionsHealth(void)
  *
  * citus_<source group>_<pid>_<distributed transaction number>_<connection number>
  *
- * (at most 5+1+10+1+10+1+20+1+10 = 59 characters, while limit is 64)
+ * (at most 5+1+10+1+10+1+20+1+10+1+20 = 80 characters, while limit is 128)
  *
  * The source group is used to distinguish 2PCs started by different
  * coordinators. A coordinator will only attempt to recover its own 2PCs.
@@ -1335,6 +1350,9 @@ CheckRemoteTransactionsHealth(void)
  * The connection number is used to distinguish connections made to a node
  * within the same transaction.
  *
+ * The transactionClockValue can be used to track all the changes made
+ * within the same transaction.
+ *
  */
 static void
 Assign2PCIdentifier(MultiConnection *connection)
@@ -1345,10 +1363,14 @@ Assign2PCIdentifier(MultiConnection *connection)
 	/* transaction identifier that is unique across processes */
 	uint64 transactionNumber = CurrentDistributedTransactionNumber();
 
+	/* Cluster clock value */
+	uint64 transactionClockValue = CurrentTransactionClockValue();
+
 	/* print all numbers as unsigned to guarantee no minus symbols appear in the name */
-	SafeSnprintf(connection->remoteTransaction.preparedName, NAMEDATALEN,
+	SafeSnprintf(connection->remoteTransaction.preparedName,
+				 PREPARED_TRANSACTION_NAME_LEN,
 				 PREPARED_TRANSACTION_NAME_FORMAT, GetLocalGroupId(), MyProcPid,
-				 transactionNumber, connectionNumber++);
+				 transactionNumber, connectionNumber++, transactionClockValue);
 }
 
 
@@ -1362,7 +1384,8 @@ bool
 ParsePreparedTransactionName(char *preparedTransactionName,
 							 int32 *groupId, int *procId,
 							 uint64 *transactionNumber,
-							 uint32 *connectionNumber)
+							 uint32 *connectionNumber,
+							 uint64 *transactionClockValue)
 {
 	char *currentCharPointer = preparedTransactionName;
 
@@ -1431,5 +1454,127 @@ ParsePreparedTransactionName(char *preparedTransactionName,
 		return false;
 	}
 
+	currentCharPointer = strchr(currentCharPointer, '_');
+	if (currentCharPointer == NULL)
+	{
+		return false;
+	}
+
+	/* step ahead of the current '_' character */
+	++currentCharPointer;
+
+	*transactionClockValue = pg_strtouint64(currentCharPointer, NULL, 10);
+	if ((errno != 0) || (*transactionClockValue == ULLONG_MAX && errno == ERANGE))
+	{
+		return false;
+	}
+
 	return true;
+}
+
+
+/*
+ * SetTransactionClusterClock() takes the connection list of participating nodes in
+ * the current transaction, and polls the logical clock value of all the nodes. It
+ * sets the maximum logical clock value of all the nodes in the distributed transaction
+ * id, which may be used as commit order for individual objects.
+ */
+void
+SetTransactionClusterClock(List *connectionList)
+{
+	/* get clock value of the local node */
+	Datum value = GetClusterClock();
+	uint64 globalClockValue = DatumGetUInt64(value);
+	ereport(DEBUG1, (errmsg("Coordinator transaction clock %lu",
+							globalClockValue)));
+
+	/* get clock value from each node */
+	MultiConnection *connection = NULL;
+	StringInfo queryToSend = makeStringInfo();
+	appendStringInfo(queryToSend, "SELECT get_cluster_clock();");
+
+	foreach_ptr(connection, connectionList)
+	{
+		int querySent = SendRemoteCommand(connection, queryToSend->data);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+	}
+
+	/* fetch the results and pick the maximum clock value of all the nodes */
+	foreach_ptr(connection, connectionList)
+	{
+		bool raiseInterrupts = true;
+
+		if (PQstatus(connection->pgConn) != CONNECTION_OK)
+		{
+			continue;
+		}
+
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (!IsResponseOK(result))
+		{
+			ereport(ERROR,
+					(errmsg("Internal error, connection failure")));
+		}
+
+		int64 rowCount = PQntuples(result);
+		int64 colCount = PQnfields(result);
+
+		/* Although it is not expected */
+		if (colCount != 1 || rowCount != 1)
+		{
+			ereport(ERROR,
+					(errmsg("unexpected result from get_cluster_clock()")));
+		}
+
+		value = ParseIntField(result, 0, 0);
+		uint64 nodeClockValue = DatumGetUInt64(value);
+		ereport(DEBUG1, (errmsg("Node(%lu) transaction clock %lu",
+								connection->connectionId, nodeClockValue)));
+
+		if (nodeClockValue > globalClockValue)
+		{
+			globalClockValue = nodeClockValue;
+		}
+
+		PQclear(result);
+		ForgetResults(connection);
+	}
+
+	ereport(DEBUG1,
+			(errmsg("Final global transaction clock %lu", globalClockValue)));
+
+	/* Set the maximum value locally */
+	SetTransactionIdClockValue(globalClockValue);
+
+	/* Set the clock value on participating worker nodes */
+	resetStringInfo(queryToSend);
+	appendStringInfo(queryToSend, "SELECT set_transaction_id_clock_value(%lu);",
+					 globalClockValue);
+	foreach_ptr(connection, connectionList)
+	{
+		int querySent = SendRemoteCommand(connection, queryToSend->data);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+	}
+
+	/* Process the result */
+	foreach_ptr(connection, connectionList)
+	{
+		bool raiseInterrupts = true;
+
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (!IsResponseOK(result))
+		{
+			ereport(ERROR,
+					(errmsg("Internal error, connection failure")));
+		}
+
+		PQclear(result);
+		ForgetResults(connection);
+	}
 }

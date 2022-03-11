@@ -275,6 +275,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
+				/* Coordinator: Adjust local clock value to the global cluster value */
+				AdjustClusterClockToGlobal();
+
 				/* handles both already prepared and open transactions */
 				CoordinatedRemoteTransactionsCommit();
 			}
@@ -284,6 +287,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			{
 				ResetPlacementConnectionManagement();
 				AfterXactConnectionHandling(true);
+			}
+			else
+			{
+				/* Worker(s): Adjust local clock value to the global cluster value */
+				AdjustClusterClockToGlobal();
 			}
 
 			/*
