@@ -965,6 +965,12 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		if (targetVarCount == 1)
 		{
 			Var *oldInsertVar = (Var *) linitial(targetVarList);
+
+            if (oldInsertVar->varno != 2)
+            {
+                ereport(ERROR, (errmsg("unexpected varno for insert (%d)", oldInsertVar->varno)));
+            }
+
 			TargetEntry *oldSubqueryTle = list_nth(subquery->targetList,
 												   oldInsertVar->varattno - 1);
 
