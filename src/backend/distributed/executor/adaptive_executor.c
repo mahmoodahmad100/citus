@@ -831,10 +831,23 @@ AdaptiveExecutor(CitusScanState *scanState)
 		distributedPlan->modLevel, taskList, excludeFromXact);
 
 	bool localExecutionSupported = true;
+	ParamListInfo execParamListInfo = copyParamList(paramListInfo);
+
+	/*
+	 * In some rare cases, we have prepared statements that pass a parameter
+	 * and never used in the query, mark such parameters' type as Invalid(0),
+	 * which will be used later in ExtractParametersFromParamList() to map them
+	 * to a generic datatype. Skip for dynamic parameters.
+	 */
+	if (execParamListInfo && !execParamListInfo->paramFetch)
+	{
+		MarkUnreferencedExternParams((Node *) job->jobQuery, execParamListInfo);
+	}
+
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
 		taskList,
-		paramListInfo,
+		execParamListInfo,
 		targetPoolSize,
 		defaultTupleDest,
 		&xactProperties,

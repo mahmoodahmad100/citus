@@ -2322,6 +2322,76 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
+ * IsExternParamUsedInQuery returns true if the passed in paramId
+ * is used in the query, false otherwise.
+ */
+bool
+IsExternParamUsedInQuery(Node *expression, int *ParamIdAddr)
+{
+	if (expression == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(expression, Param))
+	{
+		Param *param = (Param *) expression;
+		int paramId = param->paramid;
+
+		/* only care about user supplied parameters */
+		if (param->paramkind != PARAM_EXTERN)
+		{
+			return false;
+		}
+		if (paramId == *ParamIdAddr)
+		{
+			/* Found the parameter */
+			return true;
+		}
+
+		/* Continue searching */
+		return false;
+	}
+
+	/* keep traversing */
+	if (IsA(expression, Query))
+	{
+		return query_tree_walker((Query *) expression,
+								 IsExternParamUsedInQuery,
+								 ParamIdAddr,
+								 0);
+	}
+	else
+	{
+		return expression_tree_walker(expression,
+									  IsExternParamUsedInQuery,
+									  ParamIdAddr);
+	}
+}
+
+
+/*
+ * MarkUnreferencedExternParams marks parameter's type to zero if the
+ * parameter is not used in the query.
+ */
+void
+MarkUnreferencedExternParams(Node *expression, ParamListInfo boundParams)
+{
+	int parameterCount = boundParams->numParams;
+
+	for (int parameterIndex = 0; parameterIndex < parameterCount; parameterIndex++)
+	{
+		int paramId = parameterIndex + 1;
+
+		if (!IsExternParamUsedInQuery(expression, &paramId))
+		{
+			boundParams->params[parameterIndex].ptype = 0;
+		}
+	}
+}
+
+
+/*
  * GetRTEListPropertiesForQuery is a wrapper around GetRTEListProperties that
  * returns RTEListProperties for the rte list retrieved from query.
  */

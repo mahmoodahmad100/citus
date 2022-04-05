@@ -231,6 +231,8 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 										JoinType jointype,
 										JoinPathExtraData *extra);
 extern bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
+extern void MarkUnreferencedExternParams(Node *expression, ParamListInfo boundParams);
+extern bool IsExternParamUsedInQuery(Node *expression, int *ParamIdAddr);
 extern bool IsModifyCommand(Query *query);
 extern void EnsurePartitionTableNotReplicated(Oid relationId);
 extern Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
