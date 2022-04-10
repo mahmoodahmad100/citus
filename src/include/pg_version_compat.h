@@ -33,6 +33,7 @@ typedef Value String;
 #define strtou64(str, endptr, base) ((uint64) strtoull(str, endptr, base))
 #endif
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b)
+#define GetMaxBackends() MaxBackends
 
 static inline int64
 pg_strtoint64(char *s)
