@@ -35,6 +35,8 @@ typedef Value String;
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b)
 #define GetMaxBackends() MaxBackends
 #define pgstat_init_relation(r) pgstat_initstats(r)
+#define pg_analyze_and_rewrite_fixedparams(a, b, c, d, e) pg_analyze_and_rewrite(a, b, c, \
+																				 d, e)
 
 static inline int64
 pg_strtoint64(char *s)
