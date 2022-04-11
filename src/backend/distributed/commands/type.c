@@ -196,46 +196,6 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 
 
 /*
- * PreprocessAlterTypeStmt is invoked for alter type statements for composite types.
- *
- * Normally we would have a process step as well to re-ensure dependencies exists, however
- * this is already implemented by the post processing for adding columns to tables.
- */
-List *
-PreprocessAlterTypeStmt(Node *node, const char *queryString,
-						ProcessUtilityContext processUtilityContext)
-{
-	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
-
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&typeAddress))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	/* reconstruct alter statement in a portable fashion */
-	QualifyTreeNode((Node *) stmt);
-	const char *alterTypeStmtSql = DeparseTreeNode((Node *) stmt);
-
-	/*
-	 * all types that are distributed will need their alter statements propagated
-	 * regardless if in a transaction or not. If we would not propagate the alter
-	 * statement the types would be different on worker and coordinator.
-	 */
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) alterTypeStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * PreprocessCreateEnumStmt is called before the statement gets applied locally.
  *
  * It decides if the create statement will be applied to the workers and if that is the
@@ -312,55 +272,6 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 
 
 /*
- * PreprocessAlterEnumStmt handles ALTER TYPE ... ADD VALUE for enum based types. Planning
- * happens before the statement has been applied locally.
- *
- * Since it is an alter of an existing type we actually have the ObjectAddress. This is
- * used to check if the type is distributed, if so the alter will be executed on the
- * workers directly to keep the types in sync across the cluster.
- */
-List *
-PreprocessAlterEnumStmt(Node *node, const char *queryString,
-						ProcessUtilityContext processUtilityContext)
-{
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
-	if (!ShouldPropagateObject(&typeAddress))
-	{
-		return NIL;
-	}
-
-	/*
-	 * alter enum will run for all distributed enums, regardless if in a transaction or
-	 * not since the enum will be different on the coordinator and workers if we didn't.
-	 * (adding values to an enum can not run in a transaction anyway and would error by
-	 * postgres already).
-	 */
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	/*
-	 * managing types can only be done on the coordinator if ddl propagation is on. when
-	 * it is off we will never get here
-	 */
-	EnsureCoordinator();
-
-	QualifyTreeNode(node);
-	const char *alterEnumStmtSql = DeparseTreeNode(node);
-
-	/*
-	 * Before pg12 ALTER ENUM ... ADD VALUE could not be within a xact block. Instead of
-	 * creating a DDLTaksList we won't return anything here. During the processing phase
-	 * we directly connect to workers and execute the commands remotely.
-	 */
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) alterEnumStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * PreprocessDropTypeStmt is called for all DROP TYPE statements. For all types in the list that
  * citus has distributed to the workers it will drop the type on the workers as well. If
  * no types in the drop list are distributed no calls will be made to the workers.
@@ -427,43 +338,6 @@ PreprocessDropTypeStmt(Node *node, const char *queryString,
 
 
 /*
- * PreprocessRenameTypeStmt is called when the user is renaming the type. The invocation happens
- * before the statement is applied locally.
- *
- * As the type already exists we have access to the ObjectAddress for the type, this is
- * used to check if the type is distributed. If the type is distributed the rename is
- * executed on all the workers to keep the types in sync across the cluster.
- */
-List *
-PreprocessRenameTypeStmt(Node *node, const char *queryString,
-						 ProcessUtilityContext processUtilityContext)
-{
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
-	if (!ShouldPropagateObject(&typeAddress))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	/* fully qualify */
-	QualifyTreeNode(node);
-
-	/* deparse sql*/
-	const char *renameStmtSql = DeparseTreeNode(node);
-
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) renameStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * PreprocessRenameTypeAttributeStmt is called for changes of attribute names for composite
  * types. Planning is called before the statement is applied locally.
  *
@@ -488,98 +362,6 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 
 	QualifyTreeNode((Node *) stmt);
 
-	const char *sql = DeparseTreeNode((Node *) stmt);
-
-	EnsureSequentialMode(OBJECT_TYPE);
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PreprocessAlterTypeSchemaStmt is executed before the statement is applied to the local
- * postgres instance.
- *
- * In this stage we can prepare the commands that need to be run on all workers.
- */
-List *
-PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString,
-							  ProcessUtilityContext processUtilityContext)
-{
-	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TYPE);
-
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&typeAddress))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	QualifyTreeNode((Node *) stmt);
-	const char *sql = DeparseTreeNode((Node *) stmt);
-
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PostprocessAlterTypeSchemaStmt is executed after the change has been applied locally, we
- * can now use the new dependencies of the type to ensure all its dependencies exist on
- * the workers before we apply the commands remotely.
- */
-List *
-PostprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
-{
-	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TYPE);
-
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&typeAddress))
-	{
-		return NIL;
-	}
-
-	/* dependencies have changed (schema) let's ensure they exist */
-	EnsureDependenciesExistOnAllNodes(&typeAddress);
-
-	return NIL;
-}
-
-
-/*
- * PreprocessAlterTypeOwnerStmt is called for change of ownership of types before the
- * ownership is changed on the local instance.
- *
- * If the type for which the owner is changed is distributed we execute the change on all
- * the workers to keep the type in sync across the cluster.
- */
-List *
-PreprocessAlterTypeOwnerStmt(Node *node, const char *queryString,
-							 ProcessUtilityContext processUtilityContext)
-{
-	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	Assert(stmt->objectType == OBJECT_TYPE);
-
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&typeAddress))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	EnsureSequentialMode(OBJECT_TYPE);

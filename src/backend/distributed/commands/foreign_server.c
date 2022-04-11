@@ -125,38 +125,6 @@ PreprocessRenameForeignServerStmt(Node *node, const char *queryString,
 
 
 /*
- * PreprocessAlterForeignServerOwnerStmt is called during the planning phase for
- * ALTER SERVER .. OWNER TO.
- */
-List *
-PreprocessAlterForeignServerOwnerStmt(Node *node, const char *queryString,
-									  ProcessUtilityContext processUtilityContext)
-{
-	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	Assert(stmt->objectType == OBJECT_FOREIGN_SERVER);
-
-	ObjectAddress address = GetObjectAddressByServerName(strVal(stmt->object), false);
-
-	/* filter distributed servers */
-	if (!ShouldPropagateObject(&address))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	char *sql = DeparseTreeNode(node);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * PreprocessDropForeignServerStmt is called during the planning phase for
  * DROP SERVER.
  */
@@ -230,27 +198,6 @@ PostprocessCreateForeignServerStmt(Node *node, const char *queryString)
 
 	const bool missingOk = false;
 	ObjectAddress address = GetObjectAddressFromParseTree(node, missingOk);
-	EnsureDependenciesExistOnAllNodes(&address);
-
-	return NIL;
-}
-
-
-/*
- * PostprocessAlterForeignServerOwnerStmt is called after a ALTER SERVER OWNER command
- * has been executed by standard process utility.
- */
-List *
-PostprocessAlterForeignServerOwnerStmt(Node *node, const char *queryString)
-{
-	const bool missingOk = false;
-	ObjectAddress address = GetObjectAddressFromParseTree(node, missingOk);
-
-	if (!ShouldPropagateObject(&address))
-	{
-		return NIL;
-	}
-
 	EnsureDependenciesExistOnAllNodes(&address);
 
 	return NIL;
