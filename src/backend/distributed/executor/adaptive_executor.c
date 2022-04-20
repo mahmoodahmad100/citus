@@ -1987,7 +1987,7 @@ CleanUpSessions(DistributedExecution *execution)
 			}
 
 			/* get ready for the next executions if we need use the same connection */
-			connection->waitFlags = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
+			connection->waitFlags = WL_SOCKET_CLOSED | WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
 		}
 		else
 		{
@@ -2135,7 +2135,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 
 				/* always poll the connection in the first round */
 				UpdateConnectionWaitFlags(session,
-										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+						WL_SOCKET_CLOSED | WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 				/* If the connections are already avaliable, make sure to activate
 				 * 2PC when necessary.
@@ -2786,6 +2786,11 @@ ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int eventC
 			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
 		}
 
+		if (event->events & WL_SOCKET_CLOSED)
+		{
+			ereport(WARNING, (errmsg("Connection closed detected")));
+		}
+
 		if (event->events & WL_LATCH_SET)
 		{
 			ResetLatch(MyLatch);
@@ -2810,6 +2815,9 @@ ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int eventC
 
 		WorkerSession *session = (WorkerSession *) event->user_data;
 		session->latestUnconsumedWaitEvents = event->events;
+
+
+
 
 		ConnectionStateMachine(session);
 	}
@@ -3568,7 +3576,7 @@ ConnectionStateMachine(WorkerSession *session)
 				{
 					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
-											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+							WL_SOCKET_CLOSED | WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 					break;
 				}
 				else if (status == CONNECTION_BAD)
@@ -3592,14 +3600,14 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else if (pollMode == PGRES_POLLING_READING)
 				{
-					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+					UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED | WL_SOCKET_READABLE);
 
 					/* we should have a valid socket */
 					Assert(PQsocket(connection->pgConn) != -1);
 				}
 				else if (pollMode == PGRES_POLLING_WRITING)
 				{
-					UpdateConnectionWaitFlags(session, WL_SOCKET_WRITEABLE);
+					UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED | WL_SOCKET_WRITEABLE);
 
 					/* we should have a valid socket */
 					Assert(PQsocket(connection->pgConn) != -1);
@@ -3608,7 +3616,7 @@ ConnectionStateMachine(WorkerSession *session)
 				{
 					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
-											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+							WL_SOCKET_CLOSED | WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 					/* we should have a valid socket */
 					Assert(PQsocket(connection->pgConn) != -1);
@@ -3642,7 +3650,7 @@ ConnectionStateMachine(WorkerSession *session)
 					 * As no tasks are ready to be executed at the moment, we
 					 * mark the socket readable to get any notices if exists.
 					 */
-					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+					UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED | WL_SOCKET_READABLE);
 				}
 
 				break;
@@ -3946,7 +3954,7 @@ TransactionStateMachine(WorkerSession *session)
 						 * No tasks are ready to be executed at the moment. But we
 						 * still mark the socket readable to get any notices if exists.
 						 */
-						UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+						UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED | WL_SOCKET_READABLE);
 
 						break;
 					}
@@ -3966,7 +3974,7 @@ TransactionStateMachine(WorkerSession *session)
 				}
 
 				UpdateConnectionWaitFlags(session,
-										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+						WL_SOCKET_CLOSED | WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 				break;
 			}
 
@@ -3986,7 +3994,7 @@ TransactionStateMachine(WorkerSession *session)
 
 					/* wake up WaitEventSetWait */
 					UpdateConnectionWaitFlags(session,
-											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+							WL_SOCKET_CLOSED|WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 					break;
 				}
@@ -4012,7 +4020,7 @@ TransactionStateMachine(WorkerSession *session)
 
 				/* connection needs to be writeable to send next command */
 				UpdateConnectionWaitFlags(session,
-										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+						WL_SOCKET_CLOSED|WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 				if (transaction->beginSent)
 				{
@@ -4032,7 +4040,7 @@ TransactionStateMachine(WorkerSession *session)
 				if (placementExecution == NULL)
 				{
 					/* no tasks are ready to be executed at the moment */
-					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+					UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED | WL_SOCKET_READABLE);
 					break;
 				}
 
@@ -4124,7 +4132,7 @@ TransactionStateMachine(WorkerSession *session)
 					 * the query.
 					 */
 					UpdateConnectionWaitFlags(session,
-											  WL_SOCKET_WRITEABLE | WL_SOCKET_READABLE);
+							WL_SOCKET_CLOSED | WL_SOCKET_WRITEABLE | WL_SOCKET_READABLE);
 
 					transaction->transactionState = REMOTE_TRANS_SENT_COMMAND;
 
@@ -4203,6 +4211,12 @@ CheckConnectionReady(WorkerSession *session)
 	{
 		/* more data to send, wait for socket to become writable */
 		waitFlags = waitFlags | WL_SOCKET_WRITEABLE;
+		waitFlags = waitFlags | WL_SOCKET_CLOSED;
+	}
+
+	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_CLOSED) != 0)
+	{
+		elog(WARNING, "DETECT SOCKET CLOSED");
 	}
 
 	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_READABLE) != 0)
@@ -5202,7 +5216,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			 * If the connection is idle, wake it up by checking whether
 			 * the connection is writeable.
 			 */
-			UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+			UpdateConnectionWaitFlags(session, WL_SOCKET_CLOSED | WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 		}
 	}
 	else
@@ -5231,7 +5245,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 				transactionState == REMOTE_TRANS_STARTED)
 			{
 				UpdateConnectionWaitFlags(session,
-										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+						WL_SOCKET_CLOSED | WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 				break;
 			}
@@ -5366,7 +5380,7 @@ BuildWaitEventSet(List *sessionList)
 		}
 
 		int waitEventSetIndex =
-			CitusAddWaitEventSetToSet(waitEventSet, connection->waitFlags, sock,
+			CitusAddWaitEventSetToSet(waitEventSet, connection->waitFlags | WL_SOCKET_CLOSED, sock,
 									  NULL, (void *) session);
 		session->waitEventSetIndex = waitEventSetIndex;
 
@@ -5384,7 +5398,7 @@ BuildWaitEventSet(List *sessionList)
 		}
 	}
 
-	CitusAddWaitEventSetToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
+	CitusAddWaitEvefntSetToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
 							  NULL);
 	CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
 							  NULL);

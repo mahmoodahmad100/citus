@@ -18,7 +18,7 @@
 
 #include "pg_config.h"
 
-#if (PG_VERSION_NUM >= PG_VERSION_14) && (PG_VERSION_NUM < PG_VERSION_15)
+#if (PG_VERSION_NUM >= PG_VERSION_14) && (PG_VERSION_NUM <= PG_VERSION_15)
 
 #include "postgres.h"
 

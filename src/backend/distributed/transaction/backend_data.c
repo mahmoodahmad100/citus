@@ -1196,7 +1196,7 @@ ActiveDistributedTransactionNumbers(void)
 	List *activeTransactionNumberList = NIL;
 
 	/* build list of starting procs */
-	for (int curBackend = 0; curBackend < GetMaxBackends(); curBackend++)
+	for (int curBackend = 0; curBackend < MaxBackends; curBackend++)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
 		BackendData currentBackendData;

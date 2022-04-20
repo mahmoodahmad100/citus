@@ -372,7 +372,7 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 {
 	int32 localGroupId PG_USED_FOR_ASSERTS_ONLY = GetLocalGroupId();
 
-	for (int backendIndex = 0; backendIndex < GetMaxBackends(); ++backendIndex)
+	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
 		BackendData currentBackendData;

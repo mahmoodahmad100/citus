@@ -15,7 +15,7 @@
 #include "fmgr.h"
 
 #include <stddef.h>
-
+#include "pg_version_compat.h"
 #include "catalog/pg_type.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
