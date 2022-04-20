@@ -5398,7 +5398,7 @@ BuildWaitEventSet(List *sessionList)
 		}
 	}
 
-	CitusAddWaitEvefntSetToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
+	CitusAddWaitEventSetToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
 							  NULL);
 	CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
 							  NULL);
