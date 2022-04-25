@@ -40,7 +40,7 @@ COMMENT ON FUNCTION master_append_table_to_shard(bigint, text, text, integer)
 GRANT ALL ON FUNCTION start_metadata_sync_to_node(text, integer) TO PUBLIC;
 GRANT ALL ON FUNCTION stop_metadata_sync_to_node(text, integer,bool) TO PUBLIC;
 
-DROP FUNCTION pg_catalog.citus_disable_node(nodename text, nodeport integer, force bool);
+DROP FUNCTION pg_catalog.citus_disable_node(nodename text, nodeport integer, force bool, sync bool);
 CREATE FUNCTION pg_catalog.citus_disable_node(nodename text, nodeport integer)
         RETURNS void
         LANGUAGE C STRICT

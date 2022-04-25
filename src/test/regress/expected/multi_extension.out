@@ -1003,7 +1003,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function citus_check_cluster_node_health() SETOF record
                                                                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                                                                       | function citus_coordinator_nodeid() integer
-                                                                                                                      | function citus_disable_node(text,integer,boolean) void
+                                                                                                                      | function citus_disable_node(text,integer,boolean,boolean) void
                                                                                                                       | function citus_finalize_upgrade_to_citus11(boolean) boolean
                                                                                                                       | function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid) void
                                                                                                                       | function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean) void
