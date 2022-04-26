@@ -40,7 +40,8 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	 */
 	if (!IsAlterTableRenameStmt(renameStmt) &&
 		!IsIndexRenameStmt(renameStmt) &&
-		!IsPolicyRenameStmt(renameStmt))
+		!IsPolicyRenameStmt(renameStmt) &&
+		!IsViewRenameStmt(renameStmt))
 	{
 		return NIL;
 	}
@@ -63,13 +64,29 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 		return NIL;
 	}
 
-	/* check whether we are dealing with a sequence here */
-	if (get_rel_relkind(objectRelationId) == RELKIND_SEQUENCE)
+	/*
+	 * Check whether we are dealing with a sequence or view here and route queries
+	 * accordingly to the right processor function.
+	 */
+	char relKind = get_rel_relkind(objectRelationId);
+	if (relKind == RELKIND_SEQUENCE)
 	{
 		RenameStmt *stmtCopy = copyObject(renameStmt);
 		stmtCopy->renameType = OBJECT_SEQUENCE;
 		return PreprocessRenameSequenceStmt((Node *) stmtCopy, renameCommand,
 											processUtilityContext);
+	}
+	else if (relKind == RELKIND_VIEW)
+	{
+		RenameStmt *stmtCopy = copyObject(renameStmt);
+		stmtCopy->relationType = OBJECT_VIEW;
+		if (stmtCopy->renameType == OBJECT_TABLE)
+		{
+			stmtCopy->renameType = OBJECT_VIEW;
+		}
+
+		return PreprocessRenameViewStmt((Node *) stmtCopy, renameCommand,
+										processUtilityContext);
 	}
 
 	/* we have no planning to do unless the table is distributed */
