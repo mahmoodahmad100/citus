@@ -66,6 +66,12 @@ typedef struct DistributeObjectOps
 
 	/* fields used by common implementations, omitted for specialized implementations */
 	ObjectType objectType;
+
+	/*
+	 * Points to the varriable that contains the GUC'd feature flag, when turned off the
+	 * common propagation functions will not propagate the creation of the object.
+	 */
+	bool *featureFlag;
 } DistributeObjectOps;
 
 #define CITUS_TRUNCATE_TRIGGER_NAME "citus_truncate_trigger"
@@ -135,6 +141,10 @@ extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,
 									ProcessUtilityContext processUtilityContext);
 
 /* common.c - forward declarations*/
+extern List * PreprocessCreateDistributedObjectStmt(Node *stmt, const char *queryString,
+													ProcessUtilityContext
+													processUtilityContext);
+extern List * PostprocessCreateDistributedObjectStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 												   ProcessUtilityContext
 												   processUtilityContext);
@@ -251,19 +261,12 @@ extern Oid GetReferencingTableId(Oid foreignKeyId);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
 /* foreign_server.c - forward declarations */
-extern List * PreprocessCreateForeignServerStmt(Node *node, const char *queryString,
-												ProcessUtilityContext
-												processUtilityContext);
-extern List * PreprocessAlterForeignServerStmt(Node *node, const char *queryString,
-											   ProcessUtilityContext processUtilityContext);
-extern List * PreprocessRenameForeignServerStmt(Node *node, const char *queryString,
-												ProcessUtilityContext
-												processUtilityContext);
 extern List * PreprocessDropForeignServerStmt(Node *node, const char *queryString,
 											  ProcessUtilityContext
 											  processUtilityContext);
-extern List * PostprocessCreateForeignServerStmt(Node *node, const char *queryString);
 extern ObjectAddress CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterForeignServerOwnerStmtObjectAddress(Node *node, bool
 															  missing_ok);
 extern List * GetForeignServerCreateDDLCommand(Oid serverId);

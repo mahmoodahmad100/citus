@@ -96,9 +96,10 @@ static DistributeObjectOps Any_AlterExtensionContents = {
 static DistributeObjectOps Any_AlterForeignServer = {
 	.deparse = DeparseAlterForeignServerStmt,
 	.qualify = NULL,
-	.preprocess = PreprocessAlterForeignServerStmt,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.objectType = OBJECT_FOREIGN_SERVER,
+	.address = AlterForeignServerStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterFunction = {
@@ -200,8 +201,9 @@ static DistributeObjectOps Any_CreatePolicy = {
 static DistributeObjectOps Any_CreateForeignServer = {
 	.deparse = DeparseCreateForeignServerStmt,
 	.qualify = NULL,
-	.preprocess = PreprocessCreateForeignServerStmt,
-	.postprocess = PostprocessCreateForeignServerStmt,
+	.preprocess = PreprocessCreateDistributedObjectStmt,
+	.postprocess = PostprocessCreateDistributedObjectStmt,
+	.objectType = OBJECT_FOREIGN_SERVER,
 	.address = CreateForeignServerStmtObjectAddress,
 	.markDistributed = true,
 };
@@ -401,9 +403,10 @@ static DistributeObjectOps ForeignServer_Drop = {
 static DistributeObjectOps ForeignServer_Rename = {
 	.deparse = DeparseAlterForeignServerRenameStmt,
 	.qualify = NULL,
-	.preprocess = PreprocessRenameForeignServerStmt,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.objectType = OBJECT_FOREIGN_SERVER,
+	.address = RenameForeignServerStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps ForeignServer_AlterOwner = {
