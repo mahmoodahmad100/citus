@@ -359,13 +359,93 @@ ERROR:  cannot change name of view column "id" to "a"
 HINT:  Use ALTER VIEW ... RENAME COLUMN ... to change name of view column instead.
 CREATE OR REPLACE VIEW view_for_unsup_commands AS SELECT id FROM table_to_test_unsup_view;
 ERROR:  cannot drop columns from view
+-- ALTER VIEW PROPAGATION
+CREATE TABLE alter_view_table(id int, val1 text);
+SELECT create_distributed_table('alter_view_table','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE VIEW alter_view_1 AS SELECT * FROM alter_view_table;
+-- Set/drop default value is not supported by Citus
+ALTER VIEW alter_view_1 ALTER COLUMN val1 SET DEFAULT random()::text;
+ERROR:  Citus doesn't support setting or resetting default values for a column of view
+ALTER TABLE alter_view_1 ALTER COLUMN val1 SET DEFAULT random()::text;
+ERROR:  Citus doesn't support setting or resetting default values for a column of view
+ALTER VIEW alter_view_1 ALTER COLUMN val1 DROP DEFAULT;
+ERROR:  Citus doesn't support setting or resetting default values for a column of view
+ALTER TABLE alter_view_1 ALTER COLUMN val1 DROP DEFAULT;
+ERROR:  Citus doesn't support setting or resetting default values for a column of view
+-- Set/reset options view alter view/alter table commands
+ALTER VIEW alter_view_1 SET (check_option=cascaded);
+ALTER VIEW alter_view_1 SET (security_barrier);
+ALTER VIEW alter_view_1 SET (check_option=cascaded, security_barrier);
+ALTER VIEW alter_view_1 SET (check_option=cascaded, security_barrier = true);
+ALTER TABLE alter_view_1 SET (check_option=cascaded);
+ALTER TABLE alter_view_1 SET (security_barrier);
+ALTER TABLE alter_view_1 SET (check_option=cascaded, security_barrier);
+ALTER TABLE alter_view_1 SET (check_option=cascaded, security_barrier = true);
+\d+ alter_view_1
+                    View "view_prop_schema.alter_view_1"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Description
+---------------------------------------------------------------------
+ id     | integer |           |          |         | plain    |
+ val1   | text    |           |          |         | extended |
+View definition:
+ SELECT alter_view_table.id,
+    alter_view_table.val1
+   FROM alter_view_table;
+Options: check_option=cascaded, security_barrier=true
+
+\c - - - :worker_1_port
+SET search_path to view_prop_schema;
+\d+ alter_view_1
+                    View "view_prop_schema.alter_view_1"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Description
+---------------------------------------------------------------------
+ id     | integer |           |          |         | plain    |
+ val1   | text    |           |          |         | extended |
+View definition:
+ SELECT alter_view_table.id,
+    alter_view_table.val1
+   FROM alter_view_table;
+Options: check_option=cascaded, security_barrier=true
+
+\c - - - :master_port
+SET search_path to view_prop_schema;
+ALTER TABLE alter_view_1 RESET (check_option, security_barrier);
+ALTER VIEW alter_view_1 RESET (check_option, security_barrier);
+-- Change the schema of the view
+ALTER TABLE alter_view_1 SET SCHEMA view_prop_schema_inner;
+ALTER VIEW view_prop_schema_inner.alter_view_1 SET SCHEMA view_prop_schema;
+-- Rename view and view's column name
+ALTER VIEW alter_view_1 RENAME COLUMN val1 TO val2;
+ALTER VIEW alter_view_1 RENAME val2 TO val1;
+ALTER VIEW alter_view_1 RENAME TO alter_view_2;
+ALTER TABLE alter_view_2 RENAME COLUMN val1 TO val2;
+ALTER TABLE alter_view_2 RENAME val2 TO val1;
+ALTER TABLE alter_view_2 RENAME TO alter_view_1;
+-- Alter owner vith alter view/alter table
+SET client_min_messages TO ERROR;
+CREATE USER alter_view_user;
+SELECT run_command_on_workers($$CREATE USER alter_view_user;$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+ALTER VIEW alter_view_1 OWNER TO alter_view_user;
+ALTER TABLE alter_view_1 OWNER TO alter_view_user;
+RESET client_min_messages;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table view_prop_schema_inner.view_table_4
 drop cascades to view prop_view_6
 drop cascades to table view_prop_schema_inner.inner_view_table
 DROP SCHEMA view_prop_schema CASCADE;
-NOTICE:  drop cascades to 15 other objects
+NOTICE:  drop cascades to 17 other objects
 DETAIL:  drop cascades to view prop_view_basic
 drop cascades to table view_table_1
 drop cascades to view prop_view_4
@@ -381,3 +461,5 @@ drop cascades to view seq_view_prop
 drop cascades to table view_table_3
 drop cascades to table table_to_test_unsup_view
 drop cascades to view view_for_unsup_commands
+drop cascades to table alter_view_table
+drop cascades to view alter_view_1

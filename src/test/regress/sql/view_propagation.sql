@@ -210,5 +210,61 @@ CREATE VIEW view_for_unsup_commands AS SELECT * FROM table_to_test_unsup_view;
 CREATE OR REPLACE VIEW view_for_unsup_commands(a,b) AS SELECT * FROM table_to_test_unsup_view;
 CREATE OR REPLACE VIEW view_for_unsup_commands AS SELECT id FROM table_to_test_unsup_view;
 
+-- ALTER VIEW PROPAGATION
+CREATE TABLE alter_view_table(id int, val1 text);
+SELECT create_distributed_table('alter_view_table','id');
+
+CREATE VIEW alter_view_1 AS SELECT * FROM alter_view_table;
+
+-- Set/drop default value is not supported by Citus
+ALTER VIEW alter_view_1 ALTER COLUMN val1 SET DEFAULT random()::text;
+ALTER TABLE alter_view_1 ALTER COLUMN val1 SET DEFAULT random()::text;
+
+ALTER VIEW alter_view_1 ALTER COLUMN val1 DROP DEFAULT;
+ALTER TABLE alter_view_1 ALTER COLUMN val1 DROP DEFAULT;
+
+-- Set/reset options view alter view/alter table commands
+ALTER VIEW alter_view_1 SET (check_option=cascaded);
+ALTER VIEW alter_view_1 SET (security_barrier);
+ALTER VIEW alter_view_1 SET (check_option=cascaded, security_barrier);
+ALTER VIEW alter_view_1 SET (check_option=cascaded, security_barrier = true);
+
+ALTER TABLE alter_view_1 SET (check_option=cascaded);
+ALTER TABLE alter_view_1 SET (security_barrier);
+ALTER TABLE alter_view_1 SET (check_option=cascaded, security_barrier);
+ALTER TABLE alter_view_1 SET (check_option=cascaded, security_barrier = true);
+\d+ alter_view_1
+
+\c - - - :worker_1_port
+SET search_path to view_prop_schema;
+\d+ alter_view_1
+
+\c - - - :master_port
+SET search_path to view_prop_schema;
+
+ALTER TABLE alter_view_1 RESET (check_option, security_barrier);
+ALTER VIEW alter_view_1 RESET (check_option, security_barrier);
+
+-- Change the schema of the view
+ALTER TABLE alter_view_1 SET SCHEMA view_prop_schema_inner;
+ALTER VIEW view_prop_schema_inner.alter_view_1 SET SCHEMA view_prop_schema;
+
+-- Rename view and view's column name
+ALTER VIEW alter_view_1 RENAME COLUMN val1 TO val2;
+ALTER VIEW alter_view_1 RENAME val2 TO val1;
+ALTER VIEW alter_view_1 RENAME TO alter_view_2;
+
+ALTER TABLE alter_view_2 RENAME COLUMN val1 TO val2;
+ALTER TABLE alter_view_2 RENAME val2 TO val1;
+ALTER TABLE alter_view_2 RENAME TO alter_view_1;
+
+-- Alter owner vith alter view/alter table
+SET client_min_messages TO ERROR;
+CREATE USER alter_view_user;
+SELECT run_command_on_workers($$CREATE USER alter_view_user;$$);
+ALTER VIEW alter_view_1 OWNER TO alter_view_user;
+ALTER TABLE alter_view_1 OWNER TO alter_view_user;
+RESET client_min_messages;
+
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema CASCADE;

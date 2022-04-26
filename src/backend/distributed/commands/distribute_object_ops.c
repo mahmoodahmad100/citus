@@ -828,6 +828,14 @@ static DistributeObjectOps Type_AlterObjectSchema = {
 	.address = AlterTypeSchemaStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps View_AlterObjectSchema = {
+	.deparse = DeparseAlterViewSchemaStmt,
+	.qualify = QualifyAlterViewSchemaStmt,
+	.preprocess = PreprocessAlterViewSchemaStmt,
+	.postprocess = PostprocessAlterViewSchemaStmt,
+	.address = AlterViewSchemaStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Type_AlterOwner = {
 	.deparse = DeparseAlterTypeOwnerStmt,
 	.qualify = QualifyAlterTypeOwnerStmt,
@@ -842,6 +850,14 @@ static DistributeObjectOps Type_AlterTable = {
 	.preprocess = PreprocessAlterTypeStmt,
 	.postprocess = NULL,
 	.address = AlterTypeStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps View_AlterView = {
+	.deparse = DeparseAlterViewStmt,
+	.qualify = QualifyAlterViewStmt,
+	.preprocess = PreprocessAlterViewStmt,
+	.postprocess = PostprocessAlterViewStmt,
+	.address = AlterViewStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Type_Drop = {
@@ -866,6 +882,14 @@ static DistributeObjectOps Type_Rename = {
 	.preprocess = PreprocessRenameTypeStmt,
 	.postprocess = NULL,
 	.address = RenameTypeStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps View_Rename = {
+	.deparse = DeparseRenameViewStmt,
+	.qualify = QualifyRenameViewStmt,
+	.preprocess = PreprocessRenameViewStmt,
+	.postprocess = NULL,
+	.address = RenameViewStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Trigger_Rename = {
@@ -1021,6 +1045,11 @@ GetDistributeObjectOps(Node *node)
 					return &Type_AlterObjectSchema;
 				}
 
+				case OBJECT_VIEW:
+				{
+					return &View_AlterObjectSchema;
+				}
+
 				default:
 				{
 					return &NoDistributeOps;
@@ -1155,6 +1184,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_SEQUENCE:
 				{
 					return &Sequence_AlterOwner;
+				}
+
+				case OBJECT_VIEW:
+				{
+					return &View_AlterView;
 				}
 
 				default:
@@ -1510,6 +1544,23 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TRIGGER:
 				{
 					return &Trigger_Rename;
+				}
+
+				case OBJECT_VIEW:
+				{
+					return &View_Rename;
+				}
+
+				case OBJECT_COLUMN:
+				{
+					if (stmt->relationType == OBJECT_VIEW)
+					{
+						return &View_Rename;
+					}
+					else
+					{
+						return &Any_Rename;
+					}
 				}
 
 				default:

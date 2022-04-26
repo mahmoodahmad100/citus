@@ -50,3 +50,57 @@ QualifyDropViewStmt(Node *node)
 
 	stmt->objects = qualifiedViewNames;
 }
+
+
+/*
+ * QualifyAlterViewStmt quailifies the view name of the ALTER VIEW statement.
+ */
+void
+QualifyAlterViewStmt(Node *node)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_VIEW);
+
+	if (stmt->relation->schemaname == NULL)
+	{
+		char *objname = NULL;
+		List *viewNameList = list_make1(stmt->relation->relname);
+		Oid schemaOid = QualifiedNameGetCreationNamespace(viewNameList, &objname);
+		char *schemaName = get_namespace_name(schemaOid);
+		stmt->relation->schemaname = schemaName;
+	}
+}
+
+
+/*
+ * QualifyRenameViewStmt quailifies the view name of the ALTER VIEW ... RENAME statement.
+ */
+void
+QualifyRenameViewStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	RangeVar *view = stmt->relation;
+
+	if (view->schemaname == NULL)
+	{
+		Oid schemaOid = RangeVarGetCreationNamespace(view);
+		view->schemaname = get_namespace_name(schemaOid);
+	}
+}
+
+
+/*
+ * QualifyAlterViewSchemaStmt quailifies the view name of the ALTER VIEW ... SET SCHEMA statement.
+ */
+void
+QualifyAlterViewSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	RangeVar *view = stmt->relation;
+
+	if (view->schemaname == NULL)
+	{
+		Oid schemaOid = RangeVarGetCreationNamespace(view);
+		view->schemaname = get_namespace_name(schemaOid);
+	}
+}
