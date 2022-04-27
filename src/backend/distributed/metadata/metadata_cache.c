@@ -87,7 +87,6 @@
 /* user configuration */
 int ReadFromSecondaries = USE_SECONDARY_NODES_NEVER;
 
-
 /*
  * CitusTableCacheEntrySlot is entry type for DistTableCacheHash,
  * entry data outlives slot on invalidation, so requires indirection.
@@ -184,7 +183,7 @@ bool EnableVersionChecks = true; /* version checks are enabled */
 static bool citusVersionKnownCompatible = false;
 
 /* Variable to determine if we are in the process of creating citus */
-static bool CreatingCitus = false;
+static bool CachedDuringCitusCreation = false;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -1951,7 +1950,7 @@ CitusHasBeenLoadedInternal(void)
 	if (citusExtensionOid == InvalidOid)
 	{
 		/* Citus extension does not exist yet */
-		CreatingCitus = false;
+		CachedDuringCitusCreation = false;
 		return false;
 	}
 
@@ -1963,7 +1962,6 @@ CitusHasBeenLoadedInternal(void)
 		 * We set creatingCitus to true in case of a rollback so that we clear
 		 * MetadataCache
 		 */
-		CreatingCitus = true;
 		return false;
 	}
 
@@ -1973,12 +1971,22 @@ CitusHasBeenLoadedInternal(void)
 
 
 /*
- * IsCreatingCitus returns true if the citus extension is being created, otherwise return false.
+ * IsTransactionCreatingCitus returns true if the citus extension is being created, otherwise return false.
  */
 bool
 IsTransactionCreatingCitus(void)
 {
-	return CreatingCitus;
+	return CachedDuringCitusCreation;
+}
+
+
+/*
+ * Sets the value of CachedDuringCitusCreation based on argument received
+ */
+void
+SetCachedDuringCitusCreation(bool val)
+{
+	CachedDuringCitusCreation = val;
 }
 
 
@@ -4181,7 +4189,7 @@ InvalidateMetadataSystemCache(void)
 	workerNodeHashValid = false;
 	LocalGroupId = -1;
 	LocalNodeId = -1;
-	CreatingCitus = false;
+	CachedDuringCitusCreation = false;
 }
 
 
@@ -4719,6 +4727,12 @@ CachedRelationNamespaceLookupExtended(const char *relationName, Oid relnamespace
 {
 	/* force callbacks to be registered, so we always get notified upon changes */
 	InitializeCaches();
+	Oid citusExtensionOid = get_extension_oid("citus", true);
+
+	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
+	{
+		CachedDuringCitusCreation = true;
+	}
 
 	if (*cachedOid == InvalidOid)
 	{
