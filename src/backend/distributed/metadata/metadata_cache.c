@@ -183,7 +183,8 @@ bool EnableVersionChecks = true; /* version checks are enabled */
 
 static bool citusVersionKnownCompatible = false;
 
-static bool creatingCitus = false;
+/* Variable to determine if we are in the process of creating citus */
+static bool CreatingCitus = false;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -1950,7 +1951,7 @@ CitusHasBeenLoadedInternal(void)
 	if (citusExtensionOid == InvalidOid)
 	{
 		/* Citus extension does not exist yet */
-		creatingCitus = false;
+		CreatingCitus = false;
 		return false;
 	}
 
@@ -1962,12 +1963,11 @@ CitusHasBeenLoadedInternal(void)
 		 * We set creatingCitus to true in case of a rollback so that we clear
 		 * MetadataCache
 		 */
-		creatingCitus = true;
+		CreatingCitus = true;
 		return false;
 	}
 
 	/* citus extension exists and has been created */
-	creatingCitus = false;
 	return true;
 }
 
@@ -1976,9 +1976,9 @@ CitusHasBeenLoadedInternal(void)
  * IsCreatingCitus returns true if the citus extension is being created, otherwise return false.
  */
 bool
-IsCreatingCitus(void)
+IsTransactionCreatingCitus(void)
 {
-	return creatingCitus;
+	return CreatingCitus;
 }
 
 
@@ -4181,6 +4181,7 @@ InvalidateMetadataSystemCache(void)
 	workerNodeHashValid = false;
 	LocalGroupId = -1;
 	LocalNodeId = -1;
+	CreatingCitus = false;
 }
 
 
