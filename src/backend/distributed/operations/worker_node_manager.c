@@ -393,7 +393,7 @@ NodeNamePortCompare(const char *workerLhsName, const char *workerRhsName,
 WorkerNode *
 GetFirstPrimaryWorkerNode(void)
 {
-	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(AccessShareLock);
 	WorkerNode *firstWorkerNode = NULL;
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)

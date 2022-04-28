@@ -110,6 +110,7 @@ static void SyncDistributedObjectsToNode(WorkerNode *workerNode);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNode(WorkerNode *workerNode);
 static List * InterTableRelationshipCommandList();
+static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static List * PropagateNodeWideObjectsCommandList();
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
@@ -540,8 +541,19 @@ citus_disable_node(PG_FUNCTION_ARGS)
 		 *              than the current node being disabled), the sync option would
 		 *              fail because it'd try to sync the metadata changes to a node
 		 *              that is not up and running.
-		 *
 		 */
+		if (firstWorkerNode && firstWorkerNode->nodeId == workerNode->nodeId)
+		{
+			/*
+			 * We cannot let any modification query on a replicated table to run
+			 * concurrently with citus_disable_node() on the first worker node. If
+			 * we let that, some worker nodes might calculate FirstWorkerNode()
+			 * different than others. See LockShardListResourcesOnFirstWorker()
+			 * for the details.
+			 */
+			BlockDistributedQueriesOnMetadataNodes();
+		}
+
 		SyncNodeMetadataToNodes();
 	}
 	else if (UnsetMetadataSyncedForAllWorkers())
@@ -563,6 +575,44 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * BlockDistributedQueriesOnMetadataNodes blocks all the
+ */
+static void
+BlockDistributedQueriesOnMetadataNodes(void)
+{
+	/* first, block on the coordinator */
+	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
+	WorkerNode *workerNodeToLock = NULL;
+	foreach_ptr(workerNodeToLock, workerList)
+	{
+		if (!workerNodeToLock->hasMetadata)
+		{
+			/* non-metadata workers cannot run distributed queries, so skip */
+			continue;
+		}
+
+		/*
+		 * Note that we might re-design this lock to be more granular than
+		 * pg_dist_node, scoping only for modifications on the replicated
+		 * tables. However, we currently do not have any such mechanism and
+		 * given that citus_disable_node() runs instantly, it seems acceptable
+		 * to block reads (or modifications on non-replicated tables) for
+		 * a while.
+		 */
+		List *commandList =
+			list_make1("LOCK TABLE pg_dist_node IN ACCESS EXCLUSIVE MODE;");
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(
+			workerNodeToLock->workerName,
+			workerNodeToLock->workerPort,
+			CurrentUserName(),
+			commandList);
+	}
 }
 
 
