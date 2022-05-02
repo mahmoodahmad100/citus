@@ -414,69 +414,6 @@ DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
 
 
 /*
- * PreprocessDefineCollationStmt executed before the collation has been
- * created locally to ensure that if the collation create statement will
- * be propagated, the node is a coordinator node
- */
-List *
-PreprocessDefineCollationStmt(Node *node, const char *queryString,
-							  ProcessUtilityContext processUtilityContext)
-{
-	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
-
-	if (!ShouldPropagateDefineCollationStmt())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_COLLATION);
-
-	return NIL;
-}
-
-
-/*
- * PostprocessDefineCollationStmt executed after the collation has been
- * created locally and before we create it on the worker nodes.
- * As we now have access to ObjectAddress of the collation that is just
- * created, we can mark it as distributed to make sure that its
- * dependencies exist on all nodes.
- */
-List *
-PostprocessDefineCollationStmt(Node *node, const char *queryString)
-{
-	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
-
-	if (!ShouldPropagateDefineCollationStmt())
-	{
-		return NIL;
-	}
-
-	ObjectAddress collationAddress =
-		DefineCollationStmtObjectAddress(node, false);
-
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(
-		&collationAddress);
-	if (errMsg != NULL)
-	{
-		RaiseDeferredError(errMsg, WARNING);
-		return NIL;
-	}
-
-	EnsureDependenciesExistOnAllNodes(&collationAddress);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
-	commands = list_concat(commands, CreateCollationDDLsIdempotent(
-							   collationAddress.objectId));
-	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * ShouldPropagateDefineCollationStmt checks if collation define
  * statement should be propagated. Don't propagate if:
  * - metadata syncing if off

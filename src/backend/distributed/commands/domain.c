@@ -75,36 +75,6 @@ PreprocessCreateDomainStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessCreateDomainStmt gets called after the domain has been created locally. When
- * the domain is decided to be propagated we make sure all the domains dependencies exist
- * on all workers.
- */
-List *
-PostprocessCreateDomainStmt(Node *node, const char *queryString)
-{
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
-	/*
-	 * find object address of the just created object, because the domain has been created
-	 * locally it can't be missing
-	 */
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
-	EnsureDependenciesExistOnAllNodes(&typeAddress);
-
-	return NIL;
-}
-
-
-/*
  * PreprocessDropDomainStmt gets called before dropping the domain locally. For
  * distributed domains it will make sure the fully qualified statement is forwarded to all
  * the workers reflecting the drop of the domain.

@@ -16,6 +16,7 @@
 #include "distributed/deparser.h"
 #include "distributed/pg_version_constants.h"
 #include "distributed/version_compat.h"
+#include "distributed/commands/utility_hook.h"
 
 static DistributeObjectOps NoDistributeOps = {
 	.deparse = NULL,
@@ -46,8 +47,9 @@ static DistributeObjectOps Aggregate_AlterOwner = {
 static DistributeObjectOps Aggregate_Define = {
 	.deparse = NULL,
 	.qualify = QualifyDefineAggregateStmt,
-	.preprocess = PreprocessDefineAggregateStmt,
-	.postprocess = PostprocessDefineAggregateStmt,
+	.preprocess = PreprocessCreateDistributedObjectFromCatalogStmt,
+	.postprocess = PostprocessCreateDistributedObjectFromCatalogStmt,
+	.objectType = OBJECT_AGGREGATE,
 	.address = DefineAggregateStmtObjectAddress,
 	.markDistributed = true,
 };
@@ -162,7 +164,8 @@ static DistributeObjectOps Any_CreateDomain = {
 	.deparse = DeparseCreateDomainStmt,
 	.qualify = QualifyCreateDomainStmt,
 	.preprocess = PreprocessCreateDomainStmt,
-	.postprocess = PostprocessCreateDomainStmt,
+	.postprocess = PostprocessCreateDistributedObjectStmt,
+	.objectType = OBJECT_DOMAIN,
 	.address = CreateDomainStmtObjectAddress,
 	.markDistributed = true,
 };
@@ -292,8 +295,9 @@ static DistributeObjectOps Collation_AlterOwner = {
 static DistributeObjectOps Collation_Define = {
 	.deparse = NULL,
 	.qualify = NULL,
-	.preprocess = PreprocessDefineCollationStmt,
-	.postprocess = PostprocessDefineCollationStmt,
+	.preprocess = PreprocessCreateDistributedObjectFromCatalogStmt,
+	.postprocess = PostprocessCreateDistributedObjectFromCatalogStmt,
+	.objectType = OBJECT_COLLATION,
 	.address = DefineCollationStmtObjectAddress,
 	.markDistributed = true,
 };
@@ -317,8 +321,10 @@ static DistributeObjectOps Collation_Rename = {
 static DistributeObjectOps Database_AlterOwner = {
 	.deparse = DeparseAlterDatabaseOwnerStmt,
 	.qualify = NULL,
-	.preprocess = PreprocessAlterDatabaseOwnerStmt,
-	.postprocess = PostprocessAlterDatabaseOwnerStmt,
+	.preprocess = PreprocessAlterDistributedObjectStmt,
+	.postprocess = PostprocessAlterDistributedObjectStmt,
+	.objectType = OBJECT_DATABASE,
+	.featureFlag = &EnableAlterDatabaseOwner,
 	.address = AlterDatabaseOwnerObjectAddress,
 	.markDistributed = false,
 };
@@ -623,8 +629,9 @@ static DistributeObjectOps TextSearchConfig_Comment = {
 static DistributeObjectOps TextSearchConfig_Define = {
 	.deparse = DeparseCreateTextSearchConfigurationStmt,
 	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = PostprocessCreateTextSearchConfigurationStmt,
+	.preprocess = PreprocessCreateDistributedObjectFromCatalogStmt,
+	.postprocess = PostprocessCreateDistributedObjectFromCatalogStmt,
+	.objectType = OBJECT_TSCONFIGURATION,
 	.address = CreateTextSearchConfigurationObjectAddress,
 	.markDistributed = true,
 };

@@ -65,8 +65,11 @@ PreprocessCreateDistributedObjectStmt(Node *stmt, const char *queryString,
 
 
 List *
-PostprocessCreateDistributedObjectStmt(Node *node, const char *queryString)
+PostprocessCreateDistributedObjectStmt(Node *stmt, const char *queryString)
 {
+	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
+	Assert(ops != NULL);
+
 	if (!ShouldPropagate())
 	{
 		return NIL;
@@ -78,10 +81,73 @@ PostprocessCreateDistributedObjectStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+	if (ops->featureFlag && *ops->featureFlag == false)
+	{
+		/* not propagating when a configured feature flag is turned off by the user */
+		return NIL;
+	}
+
+	ObjectAddress address = GetObjectAddressFromParseTree(stmt, false);
 	EnsureDependenciesExistOnAllNodes(&address);
 
 	return NIL;
+}
+
+
+List *
+PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *queryString,
+												 ProcessUtilityContext processUtilityContext)
+{
+	QualifyTreeNode((Node *) node);
+
+	return NIL;
+}
+
+
+List *
+PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryString)
+{
+	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
+	Assert(ops != NULL);
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	/* check creation against multi-statement transaction policy */
+	if (!ShouldPropagateCreateInCoordinatedTransction())
+	{
+		return NIL;
+	}
+
+	if (ops->featureFlag && *ops->featureFlag == false)
+	{
+		/* not propagating when a configured feature flag is turned off by the user */
+		return NIL;
+	}
+
+	ObjectAddress address = GetObjectAddressFromParseTree(stmt, false);
+
+	EnsureCoordinator();
+	EnsureSequentialMode(ops->objectType);
+
+	/* If the object has any unsupported dependency warn, and only create locally */
+	DeferredErrorMessage *depError = DeferErrorIfHasUnsupportedDependency(&address);
+	if (depError != NULL)
+	{
+		RaiseDeferredError(depError, WARNING);
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	List *commands = GetDependencyCreateDDLCommands(&address);
+
+	commands = lcons(DISABLE_DDL_PROPAGATION, commands);
+	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -92,12 +158,15 @@ PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
 
-	/* Alter statements should always propagate and thus _not_ have a feature flag set */
-	Assert(ops->featureFlag == NULL);
-
 	ObjectAddress address = GetObjectAddressFromParseTree(stmt, false);
 	if (!ShouldPropagateObject(&address))
 	{
+		return NIL;
+	}
+
+	if (ops->featureFlag && *ops->featureFlag == false)
+	{
+		/* not propagating when a configured feature flag is turned off by the user */
 		return NIL;
 	}
 
@@ -118,12 +187,18 @@ PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 List *
 PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
 {
-	/* Alter statements should always propagate and thus _not_ have a feature flag set */
-	Assert(GetDistributeObjectOps(stmt)->featureFlag == NULL);
+	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
+	Assert(ops != NULL);
 
 	ObjectAddress address = GetObjectAddressFromParseTree(stmt, false);
 	if (!ShouldPropagateObject(&address))
 	{
+		return NIL;
+	}
+
+	if (ops->featureFlag && *ops->featureFlag == false)
+	{
+		/* not propagating when a configured feature flag is turned off by the user */
 		return NIL;
 	}
 

@@ -131,11 +131,6 @@ typedef enum SearchForeignKeyColumnFlags
 } SearchForeignKeyColumnFlags;
 
 
-/* aggregate.c - forward declarations */
-extern List * PreprocessDefineAggregateStmt(Node *node, const char *queryString,
-											ProcessUtilityContext processUtilityContext);
-extern List * PostprocessDefineAggregateStmt(Node *node, const char *queryString);
-
 /* cluster.c - forward declarations */
 extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,
 									ProcessUtilityContext processUtilityContext);
@@ -144,7 +139,9 @@ extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,
 extern List * PreprocessCreateDistributedObjectStmt(Node *stmt, const char *queryString,
 													ProcessUtilityContext
 													processUtilityContext);
-extern List * PostprocessCreateDistributedObjectStmt(Node *node, const char *queryString);
+extern List * PostprocessCreateDistributedObjectStmt(Node *stmt, const char *queryString);
+extern List * PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *queryString, ProcessUtilityContext processUtilityContext);
+extern List * PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryString);
 extern List * PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 												   ProcessUtilityContext
 												   processUtilityContext);
@@ -169,21 +166,14 @@ extern ObjectAddress AlterCollationSchemaStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
 extern char * GenerateBackupNameForCollationCollision(const ObjectAddress *address);
 extern ObjectAddress DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok);
-extern List * PreprocessDefineCollationStmt(Node *stmt, const char *queryString,
-											ProcessUtilityContext processUtilityContext);
-extern List * PostprocessDefineCollationStmt(Node *stmt, const char *queryString);
 
 /* database.c - forward declarations */
-extern List * PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
-											   ProcessUtilityContext processUtilityContext);
-extern List * PostprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString);
 extern ObjectAddress AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok);
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
 /* domain.c - forward declarations */
 extern List * PreprocessCreateDomainStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
-extern List * PostprocessCreateDomainStmt(Node *node, const char *queryString);
 extern List * PreprocessDropDomainStmt(Node *node, const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
 extern ObjectAddress CreateDomainStmtObjectAddress(Node *node, bool missing_ok);
@@ -480,8 +470,6 @@ extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 
 /* text_search.c - forward declarations */
-extern List * PostprocessCreateTextSearchConfigurationStmt(Node *node,
-														   const char *queryString);
 extern List * PostprocessCreateTextSearchDictionaryStmt(Node *node,
 														const char *queryString);
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);

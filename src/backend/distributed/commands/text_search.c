@@ -60,63 +60,6 @@ static Oid get_ts_config_parser_oid(Oid tsconfigOid);
 static char * get_ts_parser_tokentype_name(Oid parserOid, int32 tokentype);
 
 /*
- * PostprocessCreateTextSearchConfigurationStmt is called after the TEXT SEARCH
- * CONFIGURATION has been created locally.
- *
- * Contrary to many other objects a text search configuration is often created as a copy
- * of an existing configuration. After the copy there is no relation to the configuration
- * that has been copied. This prevents our normal approach of ensuring dependencies to
- * exist before forwarding a close ressemblance of the statement the user executed.
- *
- * Instead we recreate the object based on what we find in our own catalog, hence the
- * amount of work we perform in the postprocess function, contrary to other objects.
- */
-List *
-PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString)
-{
-	DefineStmt *stmt = castNode(DefineStmt, node);
-	Assert(stmt->kind == OBJECT_TSCONFIGURATION);
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_TSCONFIGURATION);
-
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
-
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&address);
-	if (errMsg != NULL)
-	{
-		RaiseDeferredError(errMsg, WARNING);
-		return NIL;
-	}
-
-	EnsureDependenciesExistOnAllNodes(&address);
-
-	/*
-	 * TEXT SEARCH CONFIGURATION objects are more complex with their mappings and the
-	 * possibility of copying from existing templates that we will require the idempotent
-	 * recreation commands to be run for successful propagation
-	 */
-	List *commands = CreateTextSearchConfigDDLCommandsIdempotent(&address);
-
-	commands = lcons(DISABLE_DDL_PROPAGATION, commands);
-	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * PostprocessCreateTextSearchDictionaryStmt is called after the TEXT SEARCH DICTIONARY has been
  * created locally.
  */
