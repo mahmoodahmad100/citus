@@ -2353,16 +2353,17 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsColumnarTableAmTable(relationId))
-	{
-		ereport(ERROR, (errmsg("table %s is not a columnar table",
-							   quote_identifier(RelationGetRelationName(rel)))));
-	}
 
 	if (!pg_class_ownercheck(relationId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 					   get_rel_name(relationId));
+	}
+
+	if (!IsColumnarTableAmTable(relationId))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
 	ColumnarOptions options = { 0 };
@@ -2477,16 +2478,17 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsColumnarTableAmTable(relationId))
-	{
-		ereport(ERROR, (errmsg("table %s is not a columnar table",
-							   quote_identifier(RelationGetRelationName(rel)))));
-	}
 
 	if (!pg_class_ownercheck(relationId, GetUserId()))
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 					   get_rel_name(relationId));
+	}
+
+	if (!IsColumnarTableAmTable(relationId))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
 	ColumnarOptions options = { 0 };

@@ -201,12 +201,8 @@ TRUNCATE columnar_same_transaction_truncate;
 INSERT INTO columnar_same_transaction_truncate SELECT * FROM generate_series(20, 23);
 COMMIT;
 -- should output "1" for the newly created relation
-SELECT count(distinct storage_id) - :columnar_data_files_before_truncate FROM columnar.stripe;
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
+SELECT count(distinct storage_id) - :columnar_data_files_before_truncate FROM columnar_interal.stripe;
+ERROR:  relation "columnar_interal.stripe" does not exist
 SELECT * FROM columnar_same_transaction_truncate;
  a
 ---------------------------------------------------------------------

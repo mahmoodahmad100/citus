@@ -74,7 +74,7 @@ INSERT INTO test_lseg VALUES ('( 1 , 2 ) , ( 3 , 4 )');
 SELECT minimum_value, maximum_value FROM columnar.chunk;
  minimum_value | maximum_value
 ---------------------------------------------------------------------
-              |
+               |
 (1 row)
 
 SELECT * FROM test_lseg WHERE a = '( 1 , 2 ) , ( 3 , 4 )';

@@ -5,6 +5,24 @@ CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
 AS $func$
 BEGIN
   INSERT INTO pg_depend
+  WITH columnar_schema_members(relid) AS (
+    SELECT pg_class.oid AS relid FROM pg_class
+      WHERE relnamespace =
+            COALESCE(
+	       (SELECT pg_namespace.oid FROM pg_namespace WHERE nspname = 'columnar_internal'),
+	       (SELECT pg_namespace.oid FROM pg_namespace WHERE nspname = 'columnar')
+	    )
+        AND relname IN ('chunk',
+                        'chunk_group',
+                        'chunk_group_pkey',
+                        'chunk_pkey',
+                        'options',
+                        'options_pkey',
+                        'storageid_seq',
+                        'stripe',
+                        'stripe_first_row_number_idx',
+                        'stripe_pkey')
+  )
   SELECT -- Define a dependency edge from "columnar table access method" ..
          'pg_am'::regclass::oid as classid,
          (select oid from pg_am where amname = 'columnar') as objid,
@@ -17,20 +35,10 @@ BEGIN
          -- in columnar schema, we explicitly specify list of objects that we
          -- are interested in.
          'pg_class'::regclass::oid as refclassid,
-         columnar_schema_members.relname::regclass::oid as refobjid,
+         columnar_schema_members.relid as refobjid,
          0 as refobjsubid,
          'n' as deptype
-  FROM (VALUES ('columnar.chunk'),
-               ('columnar.chunk_group'),
-               ('columnar.chunk_group_pkey'),
-               ('columnar.chunk_pkey'),
-               ('columnar.options'),
-               ('columnar.options_pkey'),
-               ('columnar.storageid_seq'),
-               ('columnar.stripe'),
-               ('columnar.stripe_first_row_number_idx'),
-               ('columnar.stripe_pkey')
-       ) columnar_schema_members(relname)
+  FROM columnar_schema_members
   -- Avoid inserting duplicate entries into pg_depend.
   EXCEPT TABLE pg_depend;
 END;
