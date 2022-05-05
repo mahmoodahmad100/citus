@@ -229,6 +229,8 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	QualifyTreeNode(node);
+
 	List *distributedObjects = NIL;
 	List *distributedObjectAddresses = NIL;
 	Node *object = NULL;
