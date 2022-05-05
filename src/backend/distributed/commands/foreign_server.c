@@ -25,62 +25,7 @@
 #include "nodes/primnodes.h"
 
 static Node * RecreateForeignServerStmt(Oid serverId);
-static bool NameListHasDistributedServer(List *serverNames);
 static ObjectAddress GetObjectAddressByServerName(char *serverName, bool missing_ok);
-
-
-/*
- * PreprocessDropForeignServerStmt is called during the planning phase for
- * DROP SERVER.
- */
-List *
-PreprocessDropForeignServerStmt(Node *node, const char *queryString,
-								ProcessUtilityContext processUtilityContext)
-{
-	DropStmt *stmt = castNode(DropStmt, node);
-	Assert(stmt->removeType == OBJECT_FOREIGN_SERVER);
-
-	bool includesDistributedServer = NameListHasDistributedServer(stmt->objects);
-
-	if (!includesDistributedServer)
-	{
-		return NIL;
-	}
-
-	if (list_length(stmt->objects) > 1)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot drop distributed server with other servers"),
-						errhint("Try dropping each object in a separate DROP command")));
-	}
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	Assert(list_length(stmt->objects) == 1);
-
-	String *serverValue = linitial(stmt->objects);
-	ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);
-
-	/* unmark distributed server */
-	UnmarkObjectDistributed(&address);
-
-	const char *deparsedStmt = DeparseTreeNode((Node *) stmt);
-
-	/*
-	 * To prevent recursive propagation in mx architecture, we disable ddl
-	 * propagation before sending the command to workers.
-	 */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) deparsedStmt,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
 
 
 /*
@@ -213,28 +158,6 @@ RecreateForeignServerStmt(Oid serverId)
 	}
 
 	return (Node *) createStmt;
-}
-
-
-/*
- * NameListHasDistributedServer takes a namelist of servers and returns true if at least
- * one of them is distributed. Returns false otherwise.
- */
-static bool
-NameListHasDistributedServer(List *serverNames)
-{
-	String *serverValue = NULL;
-	foreach_ptr(serverValue, serverNames)
-	{
-		ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);
-
-		if (IsObjectDistributed(&address))
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 

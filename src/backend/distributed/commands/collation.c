@@ -38,8 +38,6 @@
 
 static char * CreateCollationDDLInternal(Oid collationId, Oid *collowner,
 										 char **quotedCollationName);
-static List * FilterNameListForDistributedCollations(List *objects, bool missing_ok,
-													 List **addresses);
 
 /*
  * GetCreateCollationDDLInternal returns a CREATE COLLATE sql string for the
@@ -181,111 +179,6 @@ AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
 
 	return get_object_address(stmt->objectType, stmt->object, &relation,
 							  AccessExclusiveLock, missing_ok);
-}
-
-
-/*
- * FilterNameListForDistributedCollations takes a list of objects to delete.
- * This list is filtered against the collations that are distributed.
- *
- * The original list will not be touched, a new list will be created with only the objects
- * in there.
- *
- * objectAddresses is replaced with a list of object addresses for the filtered objects.
- */
-static List *
-FilterNameListForDistributedCollations(List *objects, bool missing_ok,
-									   List **objectAddresses)
-{
-	List *result = NIL;
-
-	*objectAddresses = NIL;
-
-	List *collName = NULL;
-	foreach_ptr(collName, objects)
-	{
-		Oid collOid = get_collation_oid(collName, true);
-		ObjectAddress collAddress = { 0 };
-
-		if (!OidIsValid(collOid))
-		{
-			continue;
-		}
-
-		ObjectAddressSet(collAddress, CollationRelationId, collOid);
-		if (IsObjectDistributed(&collAddress))
-		{
-			ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-			*address = collAddress;
-			*objectAddresses = lappend(*objectAddresses, address);
-			result = lappend(result, collName);
-		}
-	}
-	return result;
-}
-
-
-List *
-PreprocessDropCollationStmt(Node *node, const char *queryString,
-							ProcessUtilityContext processUtilityContext)
-{
-	DropStmt *stmt = castNode(DropStmt, node);
-
-	/*
-	 * We swap the list of objects to remove during deparse so we need a reference back to
-	 * the old list to put back
-	 */
-	List *distributedTypeAddresses = NIL;
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	QualifyTreeNode((Node *) stmt);
-
-	List *oldCollations = stmt->objects;
-	List *distributedCollations =
-		FilterNameListForDistributedCollations(oldCollations, stmt->missing_ok,
-											   &distributedTypeAddresses);
-	if (list_length(distributedCollations) <= 0)
-	{
-		/* no distributed types to drop */
-		return NIL;
-	}
-
-	/*
-	 * managing collations can only be done on the coordinator if ddl propagation is on. when
-	 * it is off we will never get here. MX workers don't have a notion of distributed
-	 * collations, so we block the call.
-	 */
-	EnsureCoordinator();
-
-	/*
-	 * remove the entries for the distributed objects on dropping
-	 */
-	ObjectAddress *addressItem = NULL;
-	foreach_ptr(addressItem, distributedTypeAddresses)
-	{
-		UnmarkObjectDistributed(addressItem);
-	}
-
-	/*
-	 * temporary swap the lists of objects to delete with the distributed objects and
-	 * deparse to an executable sql statement for the workers
-	 */
-	stmt->objects = distributedCollations;
-	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
-	stmt->objects = oldCollations;
-
-	EnsureSequentialMode(OBJECT_COLLATION);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) dropStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 

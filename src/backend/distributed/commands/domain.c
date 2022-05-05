@@ -37,8 +37,6 @@
 
 
 static CollateClause * MakeCollateClauseFromOid(Oid collationOid);
-static List * FilterNameListForDistributedDomains(List *domainNames, bool missing_ok,
-												  List **distributedDomainAddresses);
 static ObjectAddress GetDomainAddressByName(TypeName *domainName, bool missing_ok);
 
 /*
@@ -71,102 +69,6 @@ PreprocessCreateDomainStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PreprocessDropDomainStmt gets called before dropping the domain locally. For
- * distributed domains it will make sure the fully qualified statement is forwarded to all
- * the workers reflecting the drop of the domain.
- */
-List *
-PreprocessDropDomainStmt(Node *node, const char *queryString,
-						 ProcessUtilityContext processUtilityContext)
-{
-	DropStmt *stmt = castNode(DropStmt, node);
-
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	QualifyTreeNode((Node *) stmt);
-
-	List *oldDomains = stmt->objects;
-	List *distributedDomainAddresses = NIL;
-	List *distributedDomains = FilterNameListForDistributedDomains(
-		oldDomains,
-		stmt->missing_ok,
-		&distributedDomainAddresses);
-	if (list_length(distributedDomains) <= 0)
-	{
-		/* no distributed domains to drop */
-		return NIL;
-	}
-
-	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_DOMAIN);
-
-	ObjectAddress *addressItem = NULL;
-	foreach_ptr(addressItem, distributedDomainAddresses)
-	{
-		UnmarkObjectDistributed(addressItem);
-	}
-
-	/*
-	 * temporary swap the lists of objects to delete with the distributed objects and
-	 * deparse to an executable sql statement for the workers
-	 */
-	stmt->objects = distributedDomains;
-	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
-	stmt->objects = oldDomains;
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) dropStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * FilterNameListForDistributedDomains given a liost of domain names we will return a list
- * filtered with only the names of distributed domains remaining. The pointer to the list
- * distributedDomainAddresses is populated with a list of ObjectAddresses of the domains
- * that are distributed. Indices between the returned list and the object addresses are
- * synchronizes.
- * Note: the pointer in distributedDomainAddresses should not be omitted
- *
- * When missing_ok is false this function will raise an error if a domain identified by a
- * domain name cannot be found.
- */
-static List *
-FilterNameListForDistributedDomains(List *domainNames, bool missing_ok,
-									List **distributedDomainAddresses)
-{
-	Assert(distributedDomainAddresses != NULL);
-
-	List *distributedDomainNames = NIL;
-	TypeName *domainName = NULL;
-	foreach_ptr(domainName, domainNames)
-	{
-		ObjectAddress objectAddress = GetDomainAddressByName(domainName, missing_ok);
-		if (IsObjectDistributed(&objectAddress))
-		{
-			distributedDomainNames = lappend(distributedDomainNames, domainName);
-			if (distributedDomainAddresses)
-			{
-				ObjectAddress *allocatedAddress = palloc0(sizeof(ObjectAddress));
-				*allocatedAddress = objectAddress;
-				*distributedDomainAddresses = lappend(*distributedDomainAddresses,
-													  allocatedAddress);
-			}
-		}
-	}
-
-	return distributedDomainNames;
 }
 
 

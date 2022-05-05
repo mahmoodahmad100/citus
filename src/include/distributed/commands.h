@@ -166,8 +166,6 @@ extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *d
 extern char * CreateCollationDDL(Oid collationId);
 extern List * CreateCollationDDLsIdempotent(Oid collationId);
 extern ObjectAddress AlterCollationOwnerObjectAddress(Node *stmt, bool missing_ok);
-extern List * PreprocessDropCollationStmt(Node *stmt, const char *queryString,
-										  ProcessUtilityContext processUtilityContext);
 extern ObjectAddress RenameCollationStmtObjectAddress(Node *stmt, bool missing_ok);
 extern ObjectAddress AlterCollationSchemaStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
@@ -181,8 +179,6 @@ extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 /* domain.c - forward declarations */
 extern List * PreprocessCreateDomainStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
-extern List * PreprocessDropDomainStmt(Node *node, const char *queryString,
-									   ProcessUtilityContext processUtilityContext);
 extern ObjectAddress CreateDomainStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterDomainStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress DomainRenameConstraintStmtObjectAddress(Node *node,
@@ -258,9 +254,6 @@ extern Oid GetReferencingTableId(Oid foreignKeyId);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
 /* foreign_server.c - forward declarations */
-extern List * PreprocessDropForeignServerStmt(Node *node, const char *queryString,
-											  ProcessUtilityContext
-											  processUtilityContext);
 extern ObjectAddress CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok);
@@ -294,8 +287,6 @@ extern ObjectAddress AlterFunctionOwnerObjectAddress(Node *stmt,
 													 bool missing_ok);
 extern ObjectAddress AlterFunctionSchemaStmtObjectAddress(Node *stmt,
 														  bool missing_ok);
-extern List * PreprocessDropFunctionStmt(Node *stmt, const char *queryString,
-										 ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterFunctionDependsStmt(Node *stmt,
 												 const char *queryString,
 												 ProcessUtilityContext
@@ -483,14 +474,6 @@ extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
 extern List * GetCreateTextSearchDictionaryStatements(const ObjectAddress *address);
 extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
 extern List * CreateTextSearchDictDDLCommandsIdempotent(const ObjectAddress *address);
-extern List * PreprocessDropTextSearchConfigurationStmt(Node *node,
-														const char *queryString,
-														ProcessUtilityContext
-														processUtilityContext);
-extern List * PreprocessDropTextSearchDictionaryStmt(Node *node,
-													 const char *queryString,
-													 ProcessUtilityContext
-													 processUtilityContext);
 extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
 																bool missing_ok);
 extern ObjectAddress CreateTextSearchDictObjectAddress(Node *node,
