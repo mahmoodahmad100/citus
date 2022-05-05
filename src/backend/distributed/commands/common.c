@@ -20,8 +20,10 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/worker_transaction.h"
 
@@ -97,7 +99,8 @@ PostprocessCreateDistributedObjectStmt(Node *stmt, const char *queryString)
 
 List *
 PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *queryString,
-												 ProcessUtilityContext processUtilityContext)
+												 ProcessUtilityContext
+												 processUtilityContext)
 {
 	QualifyTreeNode((Node *) node);
 
@@ -206,4 +209,81 @@ PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
 	EnsureDependenciesExistOnAllNodes(&address);
 
 	return NIL;
+}
+
+
+List *
+PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
+									ProcessUtilityContext processUtilityContext)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+
+	/*
+	 * We swap the list of objects to remove during deparse so we need a reference back to
+	 * the old list to put back
+	 */
+	List *originalObjects = stmt->objects;
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	List *distributedObjects = NIL;
+	List *distributedObjectAddresses = NIL;
+	Node *object = NULL;
+	foreach_ptr(object, stmt->objects)
+	{
+		/* TODO understand if the lock should be sth else */
+		Relation rel = NULL; /* not used, but required to pass to get_object_address */
+		ObjectAddress address = get_object_address(stmt->removeType, object, &rel,
+												   AccessShareLock, stmt->missing_ok);
+		if (IsObjectDistributed(&address))
+		{
+			ObjectAddress *addressPtr = palloc0(sizeof(ObjectAddress));
+			*addressPtr = address;
+
+			distributedObjects = lappend(distributedObjects, object);
+			distributedObjectAddresses = lappend(distributedObjectAddresses, addressPtr);
+		}
+	}
+
+	if (list_length(distributedObjects) <= 0)
+	{
+		/* no distributed objects to drop */
+		return NIL;
+	}
+
+	/*
+	 * managing objects can only be done on the coordinator if ddl propagation is on. when
+	 * it is off we will never get here. MX workers don't have a notion of distributed
+	 * types, so we block the call.
+	 */
+	EnsureCoordinator();
+
+	/*
+	 * remove the entries for the distributed objects on dropping
+	 */
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, distributedObjectAddresses)
+	{
+		UnmarkObjectDistributed(address);
+	}
+
+	/*
+	 * temporary swap the lists of objects to delete with the distributed objects and
+	 * deparse to an executable sql statement for the workers
+	 */
+	stmt->objects = distributedObjects;
+	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
+	stmt->objects = originalObjects;
+
+	EnsureSequentialMode(stmt->removeType);
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								dropStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }

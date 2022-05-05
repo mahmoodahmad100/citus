@@ -140,12 +140,19 @@ extern List * PreprocessCreateDistributedObjectStmt(Node *stmt, const char *quer
 													ProcessUtilityContext
 													processUtilityContext);
 extern List * PostprocessCreateDistributedObjectStmt(Node *stmt, const char *queryString);
-extern List * PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *queryString, ProcessUtilityContext processUtilityContext);
-extern List * PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryString);
+extern List * PreprocessCreateDistributedObjectFromCatalogStmt(Node *node,
+															   const char *queryString,
+															   ProcessUtilityContext
+															   processUtilityContext);
+extern List * PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt,
+																const char *queryString);
 extern List * PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 												   ProcessUtilityContext
 												   processUtilityContext);
 extern List * PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString);
+extern List * PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
+												  ProcessUtilityContext
+												  processUtilityContext);
 
 /* index.c */
 typedef void (*PGIndexProcessor)(Form_pg_index, List **, int);
@@ -522,8 +529,6 @@ extern List * PostprocessCompositeTypeStmt(Node *stmt, const char *queryString);
 extern List * PreprocessCreateEnumStmt(Node *stmt, const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessCreateEnumStmt(Node *stmt, const char *queryString);
-extern List * PreprocessDropTypeStmt(Node *stmt, const char *queryString,
-									 ProcessUtilityContext processUtilityContext);
 extern List * PreprocessRenameTypeAttributeStmt(Node *stmt, const char *queryString,
 												ProcessUtilityContext
 												processUtilityContext);

@@ -90,8 +90,6 @@
 bool EnableCreateTypePropagation = true;
 
 /* forward declaration for helper functions*/
-static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
-static List * TypeNameListToObjectAddresses(List *objects);
 static TypeName * MakeTypeNameFromRangeVar(const RangeVar *relation);
 static Oid GetTypeOwner(Oid typeOid);
 static Oid LookupNonAssociatedArrayTypeNameOid(ParseState *pstate,
@@ -265,72 +263,6 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) createEnumStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PreprocessDropTypeStmt is called for all DROP TYPE statements. For all types in the list that
- * citus has distributed to the workers it will drop the type on the workers as well. If
- * no types in the drop list are distributed no calls will be made to the workers.
- */
-List *
-PreprocessDropTypeStmt(Node *node, const char *queryString,
-					   ProcessUtilityContext processUtilityContext)
-{
-	DropStmt *stmt = castNode(DropStmt, node);
-
-	/*
-	 * We swap the list of objects to remove during deparse so we need a reference back to
-	 * the old list to put back
-	 */
-	List *oldTypes = stmt->objects;
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	List *distributedTypes = FilterNameListForDistributedTypes(oldTypes,
-															   stmt->missing_ok);
-	if (list_length(distributedTypes) <= 0)
-	{
-		/* no distributed types to drop */
-		return NIL;
-	}
-
-	/*
-	 * managing types can only be done on the coordinator if ddl propagation is on. when
-	 * it is off we will never get here. MX workers don't have a notion of distributed
-	 * types, so we block the call.
-	 */
-	EnsureCoordinator();
-
-	/*
-	 * remove the entries for the distributed objects on dropping
-	 */
-	List *distributedTypeAddresses = TypeNameListToObjectAddresses(distributedTypes);
-	ObjectAddress *address = NULL;
-	foreach_ptr(address, distributedTypeAddresses)
-	{
-		UnmarkObjectDistributed(address);
-	}
-
-	/*
-	 * temporary swap the lists of objects to delete with the distributed objects and
-	 * deparse to an executable sql statement for the workers
-	 */
-	stmt->objects = distributedTypes;
-	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
-	stmt->objects = oldTypes;
-
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
@@ -830,60 +762,6 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 
 		count++;
 	}
-}
-
-
-/*
- * FilterNameListForDistributedTypes takes a list of objects to delete, for Types this
- * will be a list of TypeName. This list is filtered against the types that are
- * distributed.
- *
- * The original list will not be touched, a new list will be created with only the objects
- * in there.
- */
-static List *
-FilterNameListForDistributedTypes(List *objects, bool missing_ok)
-{
-	List *result = NIL;
-	TypeName *typeName = NULL;
-	foreach_ptr(typeName, objects)
-	{
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-		ObjectAddress typeAddress = { 0 };
-
-		if (!OidIsValid(typeOid))
-		{
-			continue;
-		}
-
-		ObjectAddressSet(typeAddress, TypeRelationId, typeOid);
-		if (IsObjectDistributed(&typeAddress))
-		{
-			result = lappend(result, typeName);
-		}
-	}
-	return result;
-}
-
-
-/*
- * TypeNameListToObjectAddresses transforms a List * of TypeName *'s into a List * of
- * ObjectAddress *'s. For this to succeed all Types identified by the TypeName *'s should
- * exist on this postgres, an error will be thrown otherwise.
- */
-static List *
-TypeNameListToObjectAddresses(List *objects)
-{
-	List *result = NIL;
-	TypeName *typeName = NULL;
-	foreach_ptr(typeName, objects)
-	{
-		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-		ObjectAddress *typeAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*typeAddress, TypeRelationId, typeOid);
-		result = lappend(result, typeAddress);
-	}
-	return result;
 }
 
 
