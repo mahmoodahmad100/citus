@@ -40,7 +40,6 @@ static char * CreateCollationDDLInternal(Oid collationId, Oid *collowner,
 										 char **quotedCollationName);
 static List * FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 													 List **addresses);
-static bool ShouldPropagateDefineCollationStmt(void);
 
 /*
  * GetCreateCollationDDLInternal returns a CREATE COLLATE sql string for the
@@ -410,27 +409,4 @@ DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddressSet(address, CollationRelationId, collOid);
 
 	return address;
-}
-
-
-/*
- * ShouldPropagateDefineCollationStmt checks if collation define
- * statement should be propagated. Don't propagate if:
- * - metadata syncing if off
- * - create statement should be propagated according the the ddl propagation policy
- */
-static bool
-ShouldPropagateDefineCollationStmt()
-{
-	if (!ShouldPropagate())
-	{
-		return false;
-	}
-
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return false;
-	}
-
-	return true;
 }
