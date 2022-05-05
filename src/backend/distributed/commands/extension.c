@@ -510,6 +510,15 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
+		if (!IsTableOwnedByExtension(citusTableId))
+		{
+			/*
+			 * We let extensions handle its objects by themselves. This includes
+			 * the dependencies that such table has.
+			 */
+			continue;
+		}
+
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
 
@@ -525,7 +534,6 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 			resultingObjectAddresses =
 				list_concat(resultingObjectAddresses,
 							distributableDependencyObjectAddresses);
-
 
 			/*
 			 * We mark tables distributed immediately because we also need to mark
@@ -548,10 +556,24 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 			Oid viewOid = InvalidOid;
 			foreach_oid(viewOid, viewList)
 			{
+				if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
+				{
+					/*
+					 * We currently do not support distributed materialized
+					 * views, so skip it and its dependencies.
+					 */
+					continue;
+				}
+
 				ObjectAddress viewAddress = { 0 };
 				ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
 
-				if (DeferErrorIfHasUnsupportedDependency(&viewAddress) != NULL)
+				if (IsTableOwnedByExtension(viewOid))
+				{
+					/* we let extensions handle its objects by themselves */
+					continue;
+				}
+				else if (DeferErrorIfHasUnsupportedDependency(&viewAddress) != NULL)
 				{
 					/* this view has unsupported dependencies, skip */
 					continue;
