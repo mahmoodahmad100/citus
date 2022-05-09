@@ -27,16 +27,6 @@
 #include "distributed/multi_executor.h"
 #include "distributed/worker_transaction.h"
 
-/*
- * PostprocessCreateDistributedObjectFromCatalogStmt is a common function that can be used
- * for most objects during their creation phase. After the creation has happened locally
- * this function creates idempotent statements to recreate the object addressed by the
- * ObjectAddress of resolved from the creation statement.
- *
- * Since object already need to be able to create idempotent creation sql to support
- * scaleout operations we can reuse this logic during the initial creation of the objects
- * to reduce the complexity of implementation of new DDL commands.
- */
 List *
 PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *queryString,
 												 ProcessUtilityContext
@@ -47,7 +37,16 @@ PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *querySt
 	return NIL;
 }
 
-
+/*
+ * PostprocessCreateDistributedObjectFromCatalogStmt is a common function that can be used
+ * for most objects during their creation phase. After the creation has happened locally
+ * this function creates idempotent statements to recreate the object addressed by the
+ * ObjectAddress of resolved from the creation statement.
+ *
+ * Since object already need to be able to create idempotent creation sql to support
+ * scaleout operations we can reuse this logic during the initial creation of the objects
+ * to reduce the complexity of implementation of new DDL commands.
+ */
 List *
 PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryString)
 {
