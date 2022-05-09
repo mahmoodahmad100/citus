@@ -37,6 +37,7 @@ PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *querySt
 	return NIL;
 }
 
+
 /*
  * PostprocessCreateDistributedObjectFromCatalogStmt is a common function that can be used
  * for most objects during their creation phase. After the creation has happened locally
