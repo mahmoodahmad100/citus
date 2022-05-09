@@ -38,6 +38,17 @@
  * to reduce the complexity of implementation of new DDL commands.
  */
 List *
+PreprocessCreateDistributedObjectFromCatalogStmt(Node *node, const char *queryString,
+												 ProcessUtilityContext
+												 processUtilityContext)
+{
+	QualifyTreeNode((Node *) node);
+
+	return NIL;
+}
+
+
+List *
 PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryString)
 {
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
