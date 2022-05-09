@@ -184,7 +184,7 @@ bool EnableVersionChecks = true; /* version checks are enabled */
 static bool citusVersionKnownCompatible = false;
 
 /* Variable to determine if we are in the process of creating citus */
-static Oid CachedDuringCitusCreation = InvalidOid;
+static TransactionId CachedDuringCitusCreation = InvalidTransactionId;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -1971,7 +1971,7 @@ CitusHasBeenLoadedInternal(void)
 /*
  * IsTransactionCreatingCitus returns the Oid of the transaction creating citus
  */
-Oid
+TransactionId
 IsTransactionCreatingCitus(void)
 {
 	return CachedDuringCitusCreation;
@@ -1982,7 +1982,7 @@ IsTransactionCreatingCitus(void)
  * Sets the value of CachedDuringCitusCreation based on Oid received
  */
 void
-SetCachedDuringCitusCreation(Oid val)
+SetCachedDuringCitusCreation(TransactionId val)
 {
 	CachedDuringCitusCreation = val;
 }
