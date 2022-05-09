@@ -155,24 +155,29 @@ static DistributeObjectOps Any_Cluster = {
 static DistributeObjectOps Any_CompositeType = {
 	.deparse = DeparseCompositeTypeStmt,
 	.qualify = QualifyCompositeTypeStmt,
-	.preprocess = PreprocessCompositeTypeStmt,
-	.postprocess = PostprocessCompositeTypeStmt,
+	.preprocess = PreprocessCreateDistributedObjectFromCatalogStmt,
+	.postprocess = PostprocessCreateDistributedObjectFromCatalogStmt,
+	.objectType = OBJECT_TYPE,
+	.featureFlag = &EnableCreateTypePropagation,
 	.address = CompositeTypeStmtObjectAddress,
 	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateDomain = {
 	.deparse = DeparseCreateDomainStmt,
 	.qualify = QualifyCreateDomainStmt,
-	.preprocess = PreprocessCreateDomainStmt,
-	.postprocess = PostprocessCreateDomainStmt,
+	.preprocess = PreprocessCreateDistributedObjectFromCatalogStmt,
+	.postprocess = PostprocessCreateDistributedObjectFromCatalogStmt,
+	.objectType = OBJECT_DOMAIN,
 	.address = CreateDomainStmtObjectAddress,
 	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateEnum = {
 	.deparse = DeparseCreateEnumStmt,
 	.qualify = QualifyCreateEnumStmt,
-	.preprocess = PreprocessCreateEnumStmt,
-	.postprocess = PostprocessCreateEnumStmt,
+	.preprocess = PreprocessCreateDistributedObjectFromCatalogStmt,
+	.postprocess = PostprocessCreateDistributedObjectFromCatalogStmt,
+	.objectType = OBJECT_TYPE,
+	.featureFlag = &EnableCreateTypePropagation,
 	.address = CreateEnumStmtObjectAddress,
 	.markDistributed = true,
 };
@@ -690,8 +695,9 @@ static DistributeObjectOps TextSearchDict_Comment = {
 static DistributeObjectOps TextSearchDict_Define = {
 	.deparse = DeparseCreateTextSearchDictionaryStmt,
 	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = PostprocessCreateTextSearchDictionaryStmt,
+	.preprocess = PreprocessCreateDistributedObjectFromCatalogStmt,
+	.postprocess = PostprocessCreateDistributedObjectFromCatalogStmt,
+	.objectType = OBJECT_TSDICTIONARY,
 	.address = CreateTextSearchDictObjectAddress,
 	.markDistributed = true,
 };

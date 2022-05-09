@@ -173,9 +173,6 @@ extern ObjectAddress AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
 /* domain.c - forward declarations */
-extern List * PreprocessCreateDomainStmt(Node *node, const char *queryString,
-										 ProcessUtilityContext processUtilityContext);
-extern List * PostprocessCreateDomainStmt(Node *node, const char *queryString);
 extern ObjectAddress CreateDomainStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterDomainStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress DomainRenameConstraintStmtObjectAddress(Node *node,
@@ -465,8 +462,6 @@ extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 
 /* text_search.c - forward declarations */
-extern List * PostprocessCreateTextSearchDictionaryStmt(Node *node,
-														const char *queryString);
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
 extern List * GetCreateTextSearchDictionaryStatements(const ObjectAddress *address);
 extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
@@ -503,12 +498,6 @@ extern List * get_ts_config_namelist(Oid tsconfigOid);
 extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);
 
 /* type.c - forward declarations */
-extern List * PreprocessCompositeTypeStmt(Node *stmt, const char *queryString,
-										  ProcessUtilityContext processUtilityContext);
-extern List * PostprocessCompositeTypeStmt(Node *stmt, const char *queryString);
-extern List * PreprocessCreateEnumStmt(Node *stmt, const char *queryString,
-									   ProcessUtilityContext processUtilityContext);
-extern List * PostprocessCreateEnumStmt(Node *stmt, const char *queryString);
 extern List * PreprocessRenameTypeAttributeStmt(Node *stmt, const char *queryString,
 												ProcessUtilityContext
 												processUtilityContext);

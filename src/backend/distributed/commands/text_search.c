@@ -57,56 +57,6 @@ static List * get_ts_template_namelist(Oid tstemplateOid);
 static Oid get_ts_config_parser_oid(Oid tsconfigOid);
 static char * get_ts_parser_tokentype_name(Oid parserOid, int32 tokentype);
 
-/*
- * PostprocessCreateTextSearchDictionaryStmt is called after the TEXT SEARCH DICTIONARY has been
- * created locally.
- */
-List *
-PostprocessCreateTextSearchDictionaryStmt(Node *node, const char *queryString)
-{
-	DefineStmt *stmt = castNode(DefineStmt, node);
-	Assert(stmt->kind == OBJECT_TSDICTIONARY);
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_TSDICTIONARY);
-
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
-
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&address);
-	if (errMsg != NULL)
-	{
-		RaiseDeferredError(errMsg, WARNING);
-		return NIL;
-	}
-
-	EnsureDependenciesExistOnAllNodes(&address);
-
-	QualifyTreeNode(node);
-	const char *createTSDictionaryStmtSql = DeparseTreeNode(node);
-
-	/*
-	 * To prevent recursive propagation in mx architecture, we disable ddl
-	 * propagation before sending the command to workers.
-	 */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) createTSDictionaryStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
 List *
 GetCreateTextSearchConfigStatements(const ObjectAddress *address)
 {

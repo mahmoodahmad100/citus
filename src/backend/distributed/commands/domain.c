@@ -40,69 +40,6 @@ static CollateClause * MakeCollateClauseFromOid(Oid collationOid);
 static ObjectAddress GetDomainAddressByName(TypeName *domainName, bool missing_ok);
 
 /*
- * PreprocessCreateDomainStmt handles the propagation of the create domain statements.
- */
-List *
-PreprocessCreateDomainStmt(Node *node, const char *queryString,
-						   ProcessUtilityContext processUtilityContext)
-{
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_DOMAIN);
-
-	QualifyTreeNode(node);
-	const char *sql = DeparseTreeNode(node);
-	sql = WrapCreateOrReplace(sql);
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PostprocessCreateDomainStmt gets called after the domain has been created locally. When
- * the domain is decided to be propagated we make sure all the domains dependencies exist
- * on all workers.
- */
-List *
-PostprocessCreateDomainStmt(Node *node, const char *queryString)
-{
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
-	/*
-	 * find object address of the just created object, because the domain has been created
-	 * locally it can't be missing
-	 */
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
-	EnsureDependenciesExistOnAllNodes(&typeAddress);
-
-	return NIL;
-}
-
-
-/*
  * GetDomainAddressByName returns the ObjectAddress of the domain identified by
  * domainName. When missing_ok is true the object id part of the ObjectAddress can be
  * InvalidOid. When missing_ok is false this function will raise an error instead when the
