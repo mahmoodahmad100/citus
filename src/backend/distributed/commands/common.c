@@ -27,7 +27,16 @@
 #include "distributed/multi_executor.h"
 #include "distributed/worker_transaction.h"
 
-
+/*
+ * PostprocessCreateDistributedObjectFromCatalogStmt is a common function that can be used
+ * for most objects during their creation phase. After the creation has happened locally
+ * this function creates idempotent statements to recreate the object addressed by the
+ * ObjectAddress of resolved from the creation statement.
+ * 
+ * Since object already need to be able to create idempotent creation sql to support
+ * scaleout operations we can reuse this logic during the initial creation of the objects
+ * to reduce the complexity of implementation of new DDL commands.
+ */
 List *
 PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryString)
 {
@@ -75,6 +84,25 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 }
 
 
+/*
+ * PreprocessAlterDistributedObjectStmt handles any updates to distributed objects by
+ * creating the fully qualified sql to apply to all workers after checking all
+ * predconditions that apply to propagating changes.
+ * 
+ * Preconditions are (in order):
+ *  - not in a CREATE/ALTER EXTENSION code block
+ *  - citus.enable_metadata_sync is turned on
+ *  - object being altered is distributed
+ *  - any object specific feature flag is turned on when a feature flag is available
+ * 
+ * Once we conclude to propagate the changes to the workers we make sure that the command 
+ * has been executed on the coordinator and force any ongoing transaction to run in
+ * sequential mode. If any of these steps fail we raise an error to inform the user.
+ * 
+ * Lastly we recreate a fully qualified version of the original sql and prepare the tasks
+ * to send these sql commands to the workers. These tasks include instructions to prevent
+ * recursion of propagation with Citus' MX functionality.
+ */
 List *
 PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 									 ProcessUtilityContext processUtilityContext)
@@ -108,6 +136,19 @@ PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 }
 
 
+/*
+ * PostprocessAlterDistributedObjectStmt is the counter part of
+ * PreprocessAlterDistributedObjectStmt that should be executed after the object has been
+ * changed locally.
+ * 
+ * We perform the same precondition checks as before to skip this operation if any of the
+ * failed during preprocessing. Since we already raised an error on other checks we don't
+ * have to repeat them here, as they will never fail during postprocessing.
+ * 
+ * When objects get altered they can start depending on undistributed objects. Now that
+ * the objects has been changed locally we can find these new dependencies and make sure
+ * they get created on the workers before we send the command list to the workers.
+ */
 List *
 PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
 {
@@ -132,6 +173,27 @@ PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
 }
 
 
+/*
+ * PreprocessDropDistributedObjectStmt is a general purpose hook that can propagate any
+ * DROP statement.
+ * 
+ * DROP statements are one of the few DDL statements that can work on many different
+ * objects at once. Instead of resolving just one ObjectAddress and check it is
+ * distributed we will need to lookup many different object addresses. Only if an object
+ * was _not_ distributed we will need to remove it from the list of objects before we
+ * recreate the sql statement.
+ * 
+ * Given that we actually _do_ need to drop them locally we can't simply remove them from
+ * the object list. Instead we create a new list where we only add distributed objects to.
+ * Before we recreate the sql statement we put this list on the drop statement, so that
+ * the SQL created will only contain the objects that are actually distributed in the
+ * cluster. After we have the SQL we restore the old list so that all objects get deleted
+ * locally.
+ * 
+ * The reason we need to go through all this effort is taht we can't resolve the object
+ * addresses anymore after the objects have been removed locally. Meaning during the
+ * postprocessing we cannot understand which objects were distributed to begin with.
+ */
 List *
 PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 									ProcessUtilityContext processUtilityContext)
