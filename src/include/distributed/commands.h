@@ -136,10 +136,6 @@ extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,
 									ProcessUtilityContext processUtilityContext);
 
 /* common.c - forward declarations*/
-extern List * PreprocessCreateDistributedObjectFromCatalogStmt(Node *node,
-															   const char *queryString,
-															   ProcessUtilityContext
-															   processUtilityContext);
 extern List * PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt,
 																const char *queryString);
 extern List * PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
