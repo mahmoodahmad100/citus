@@ -195,8 +195,9 @@ directory is present locally
 MESSAGE
 }
 
-my $vanillaRegress = catfile("${postgresBuilddir}", "src", "test", "regress", "pg_regress");
-my $vanillaSchedule = catfile(dirname("${pgxsdir}"), "regress", "parallel_schedule");
+my $pgregressdir = catfile("${postgresBuilddir}", "src", "test", "regress");
+my $vanillaRegress = catfile("${pgregressdir}", "pg_regress");
+my $vanillaSchedule = catfile("${pgregressdir}", "parallel_schedule");
 
 if ($vanillatest && ! (-f "$vanillaRegress" or -f "$vanillaSchedule"))
 {
@@ -989,8 +990,8 @@ if ($vanillatest)
 	    rmdir "./testtablespace";
 	    mkdir "./testtablespace";
 
-	    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
 	    $exitcode = system("$plainRegress", ("--inputdir",  $pgregressdir),
+			   ("--load-extension", "citus"),
 	           ("--schedule",  catfile("$pgregressdir", "parallel_schedule")))
 	}
 	else
