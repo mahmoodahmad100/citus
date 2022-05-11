@@ -2104,6 +2104,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	Node *parsetree = pstmt->utilityStmt;
 
+	RangeVar *columnarRangeVar = NULL;
+	List *columnarOptions = NIL;
 	if (IsA(parsetree, IndexStmt))
 	{
 		IndexStmt *indexStmt = (IndexStmt *) parsetree;
@@ -2126,9 +2128,62 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 		RelationClose(rel);
 	}
+	else if (IsA(parsetree, CreateStmt))
+	{
+		CreateStmt *createStmt = castNode(CreateStmt, parsetree);
+		if (createStmt->accessMethod != NULL &&
+			!strcmp(createStmt->accessMethod, "columnar"))
+		{
+			columnarRangeVar = createStmt->relation;
+			createStmt->options = ExtractColumnarRelOptions(createStmt->options,
+															&columnarOptions);
+		}
+	}
+	else if (IsA(parsetree, CreateTableAsStmt))
+	{
+		CreateTableAsStmt *createTableAsStmt = castNode(CreateTableAsStmt, parsetree);
+		IntoClause *into = createTableAsStmt->into;
+		if (into->accessMethod != NULL &&
+			!strcmp(into->accessMethod, "columnar"))
+		{
+			columnarRangeVar = into->rel;
+			into->options = ExtractColumnarRelOptions(into->options,
+													  &columnarOptions);
+		}
+	}
+	else if (IsA(parsetree, AlterTableStmt))
+	{
+#ifdef NOT_USED
+		AlterTableStmt *alterTableStmt = castNode(parsetree, AlterTableStmt);
+		ListCell *lc;
+
+		foreach (lc, alterTableStmt->cmds)
+		{
+			AlterTableCmd *alterTableCmd = castNode(lfirst(lc), AlterTableCmd);
+
+			if (cmd->subtype == AT_SetOptions)
+			{
+				ReadColumnarOptions(reloid, &options);
+				alterTableCmd->def = (Node *) ExtractColumnarOptions(
+					(List *) alterTableCmd->def, &options, &setColumnarOptions);
+			}
+			else if (cmd->subtype == AT_ResetOptions)
+			{
+				/* reset to default */
+				options = DefaultColumnarOptions();
+				setColumnarOptions = true;
+			}
+		}
+#endif
+	}
 
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
+
+	if (columnarRangeVar != NULL && columnarOptions != NIL)
+	{
+		SetColumnarRelOptions(columnarRangeVar, columnarOptions);
+	}
 }
 
 

@@ -59,6 +59,7 @@
 #include "utils/rel.h"
 #include "utils/relfilenodemap.h"
 
+#define COLUMNAR_RELOPTION_NAMESPACE "columnar"
 
 typedef struct
 {
@@ -215,6 +216,115 @@ InitColumnarOptions(Oid regclass)
 	};
 
 	WriteColumnarOptions(regclass, &defaultOptions, false);
+}
+
+
+/*
+ * ExtractColumnarOptions - split inoutOptions into two lists, one for
+ * columnar options and another for everything else.
+ */
+List *
+ExtractColumnarRelOptions(List *inOptions, List **outColumnarOptions)
+{
+	List *columnarOptions = NIL;
+	List *otherOptions = NIL;
+	ListCell *lc;
+
+	foreach (lc, inOptions)
+	{
+		DefElem *elem = castNode(DefElem, lfirst(lc));
+
+		if (strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) == 0)
+		{
+			columnarOptions = lappend(columnarOptions, elem);
+		}
+		else
+		{
+			otherOptions = lappend(otherOptions, elem);
+		}
+	}
+
+	*outColumnarOptions = columnarOptions;
+
+	return otherOptions;
+}
+
+
+/*
+ * SetColumnarRelOptions - apply the list of DefElem options to the relation.
+ */
+void
+SetColumnarRelOptions(RangeVar *rv, List *reloptions)
+{
+	ColumnarOptions options;
+
+	if (reloptions == NIL)
+	{
+		return;
+	}
+
+	Relation rel = relation_openrv(rv, AccessShareLock);
+	Oid relid = RelationGetRelid(rel);
+	relation_close(rel, NoLock);
+
+	/* get existing or default options */
+	if (!ReadColumnarOptions(relid, &options))
+	{
+		/* if extension doesn't exist, just return */
+		return;
+	}
+
+	ListCell *lc;
+	foreach (lc, reloptions)
+	{
+		DefElem *elem = castNode(DefElem, lfirst(lc));
+
+		if (strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) != 0)
+		{
+			ereport(ERROR, (errmsg("columnar options must have the prefix \"%s\"",
+								   COLUMNAR_RELOPTION_NAMESPACE)));
+		}
+
+		if (strcmp(elem->defname, "chunk_group_row_limit") == 0)
+		{
+			options.chunkRowCount = (elem->arg == NULL) ?
+				columnar_chunk_group_row_limit : defGetInt64(elem);
+		}
+		else if (strcmp(elem->defname, "stripe_row_limit") == 0)
+		{
+			options.stripeRowCount = (elem->arg == NULL) ?
+				columnar_stripe_row_limit : defGetInt64(elem);
+		}
+		else if (strcmp(elem->defname, "compression") == 0)
+		{
+			if (elem->arg == NULL)
+			{
+				options.compressionType = columnar_compression;
+			}
+			else
+			{
+				char *compressionStr = defGetString(elem);
+				CompressionType compressionType = ParseCompressionType(compressionStr);
+				
+				if (options.compressionType == COMPRESSION_TYPE_INVALID)
+				{
+					ereport(ERROR, (errmsg("invalid columnar compression type: \"%s\"",
+										   compressionStr)));
+				}
+				else
+				{
+					options.compressionType = compressionType;
+				}
+			}
+		}
+		else if (strcmp(elem->defname, "compression_level") == 0)
+		{
+			options.compressionLevel = (elem->arg == NULL) ?
+				columnar_compression_level : defGetInt64(elem);
+		}
+	}
+
+	SetColumnarOptions(relid, &options);
 }
 
 
