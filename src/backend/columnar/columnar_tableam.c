@@ -2153,28 +2153,49 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	}
 	else if (IsA(parsetree, AlterTableStmt))
 	{
-#ifdef NOT_USED
-		AlterTableStmt *alterTableStmt = castNode(parsetree, AlterTableStmt);
-		ListCell *lc;
+		AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, parsetree);
+		bool toColumnar = false;
 
+		Relation rel = relation_openrv(alterTableStmt->relation, AccessShareLock);
+		bool isColumnar = (rel->rd_tableam == GetColumnarTableAmRoutine());
+
+		ListCell *lc;
 		foreach (lc, alterTableStmt->cmds)
 		{
-			AlterTableCmd *alterTableCmd = castNode(lfirst(lc), AlterTableCmd);
+			AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, lfirst(lc));
 
-			if (cmd->subtype == AT_SetOptions)
+			if (alterTableCmd->subtype == AT_SetRelOptions ||
+				alterTableCmd->subtype == AT_ResetRelOptions)
 			{
-				ReadColumnarOptions(reloid, &options);
-				alterTableCmd->def = (Node *) ExtractColumnarOptions(
-					(List *) alterTableCmd->def, &options, &setColumnarOptions);
+				List *options = castNode(List, alterTableCmd->def);
+
+				if (isColumnar || toColumnar)
+				{
+					columnarRangeVar = alterTableStmt->relation;
+					alterTableCmd->def = (Node *) ExtractColumnarRelOptions(options,
+																			&columnarOptions);
+				}
 			}
-			else if (cmd->subtype == AT_ResetOptions)
+#if PG_VERSION_NUM >= PG_VERSION_15
+			else if (alterTableCmd->subtype == AT_SetAccessMethod)
 			{
-				/* reset to default */
-				options = DefaultColumnarOptions();
-				setColumnarOptions = true;
+				if (toColumnar || columnarRangeVar || columnarOptions)
+				{
+					ereport(ERROR, (errmsg("ALTER TABLE cannot alter the access method after altering storage parameters"),
+									errhint("Specify SET ACCESS METHOD before storage parameters, or use separate ALTER TABLE commands.")));
+				}
+
+				toColumnar = (strcmp(alterTableCmd->name, COLUMNAR_AM_NAME) == 0);
+
+				if (isColumnar && !toColumnar)
+				{
+					DeleteColumnarTableOptions(RelationGetRelid(rel), true);
+				}
 			}
+#endif /* PG_VERSION_15 */
 		}
-#endif
+
+		relation_close(rel, NoLock);		
 	}
 
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,

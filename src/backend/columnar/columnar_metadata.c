@@ -234,7 +234,8 @@ ExtractColumnarRelOptions(List *inOptions, List **outColumnarOptions)
 	{
 		DefElem *elem = castNode(DefElem, lfirst(lc));
 
-		if (strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) == 0)
+		if (elem->defnamespace != NULL &&
+			strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) == 0)
 		{
 			columnarOptions = lappend(columnarOptions, elem);
 		}
@@ -279,7 +280,8 @@ SetColumnarRelOptions(RangeVar *rv, List *reloptions)
 	{
 		DefElem *elem = castNode(DefElem, lfirst(lc));
 
-		if (strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) != 0)
+		if (elem->defnamespace == NULL ||
+			strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) != 0)
 		{
 			ereport(ERROR, (errmsg("columnar options must have the prefix \"%s\"",
 								   COLUMNAR_RELOPTION_NAMESPACE)));
@@ -305,7 +307,7 @@ SetColumnarRelOptions(RangeVar *rv, List *reloptions)
 			{
 				char *compressionStr = defGetString(elem);
 				CompressionType compressionType = ParseCompressionType(compressionStr);
-				
+
 				if (options.compressionType == COMPRESSION_TYPE_INVALID)
 				{
 					ereport(ERROR, (errmsg("invalid columnar compression type: \"%s\"",
