@@ -38,7 +38,8 @@ QualifyAlterSequenceOwnerStmt(Node *node)
 
 	if (seq->schemaname == NULL)
 	{
-		Oid schemaOid = RangeVarGetCreationNamespace(seq);
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+		Oid schemaOid = get_rel_namespace(seqOid);
 		seq->schemaname = get_namespace_name(schemaOid);
 	}
 }
@@ -59,7 +60,8 @@ QualifyAlterSequenceSchemaStmt(Node *node)
 
 	if (seq->schemaname == NULL)
 	{
-		Oid schemaOid = RangeVarGetCreationNamespace(seq);
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+		Oid schemaOid = get_rel_namespace(seqOid);
 		seq->schemaname = get_namespace_name(schemaOid);
 	}
 }

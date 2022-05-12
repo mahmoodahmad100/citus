@@ -23,7 +23,8 @@
 
 /* forward declaration for deparse functions */
 static void AppendDropSequenceStmt(StringInfo buf, DropStmt *stmt);
-static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype);
+static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype,
+								   bool missingOk);
 static void AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt);
@@ -59,7 +60,7 @@ AppendDropSequenceStmt(StringInfo buf, DropStmt *stmt)
 		appendStringInfoString(buf, "IF EXISTS ");
 	}
 
-	AppendSequenceNameList(buf, stmt->objects, stmt->removeType);
+	AppendSequenceNameList(buf, stmt->objects, stmt->removeType, stmt->missing_ok);
 
 	if (stmt->behavior == DROP_CASCADE)
 	{
@@ -74,7 +75,7 @@ AppendDropSequenceStmt(StringInfo buf, DropStmt *stmt)
  * AppendSequenceNameList appends a string representing the list of sequence names to a buffer
  */
 static void
-AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype)
+AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype, bool missingOk)
 {
 	ListCell *objectCell = NULL;
 	foreach(objectCell, objects)
@@ -88,7 +89,8 @@ AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype)
 
 		if (seq->schemaname == NULL)
 		{
-			Oid schemaOid = RangeVarGetCreationNamespace(seq);
+			Oid seqOid = RangeVarGetRelid(seq, NoLock, missingOk);
+			Oid schemaOid = get_rel_namespace(seqOid);
 			seq->schemaname = get_namespace_name(schemaOid);
 		}
 
