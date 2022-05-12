@@ -2195,7 +2195,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 #endif /* PG_VERSION_15 */
 		}
 
-		relation_close(rel, NoLock);		
+		relation_close(rel, NoLock);
 	}
 
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
