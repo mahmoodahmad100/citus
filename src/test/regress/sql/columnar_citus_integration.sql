@@ -118,7 +118,7 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression => 'pglz');
+ALTER TABLE table_option SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -136,7 +136,7 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression_level => 17);
+ALTER TABLE table_option SET (columnar.compression_level = 17);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -154,7 +154,7 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', chunk_group_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -172,7 +172,7 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', stripe_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -215,7 +215,7 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', compression => 'pglz');
+ALTER TABLE table_option_reference SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -233,7 +233,7 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', compression_level => 11);
+ALTER TABLE table_option_reference SET (columnar.compression_level = 11);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -251,7 +251,7 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', chunk_group_row_limit => 2000);
+ALTER TABLE table_option_reference SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -269,7 +269,7 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', stripe_row_limit => 2000);
+ALTER TABLE table_option_reference SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -315,7 +315,7 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', compression => 'pglz');
+ALTER TABLE table_option_citus_local SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -333,7 +333,7 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', compression_level => 11);
+ALTER TABLE table_option_citus_local SET (columnar.compression_level = 11);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -351,7 +351,7 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', chunk_group_row_limit => 2000);
+ALTER TABLE table_option_citus_local SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -369,7 +369,7 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', stripe_row_limit => 2000);
+ALTER TABLE table_option_citus_local SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
