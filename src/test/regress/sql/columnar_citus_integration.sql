@@ -18,7 +18,7 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression => 'pglz');
+ALTER TABLE table_option SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -36,13 +36,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression_level => 13);
+ALTER TABLE table_option SET (columnar.compression_level = 13);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', compression_level => true);
+ALTER TABLE table_option RESET (columnar.compression_level);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -54,13 +54,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', chunk_group_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', chunk_group_row_limit => true);
+ALTER TABLE table_option RESET (columnar.chunk_group_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -72,13 +72,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', stripe_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', stripe_row_limit => true);
+ALTER TABLE table_option RESET (columnar.stripe_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -86,11 +86,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 15);
+ALTER TABLE table_option_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 15);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
@@ -160,7 +160,7 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', chunk_group_row_limit => true);
+ALTER TABLE table_option RESET (columnar.chunk_group_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
