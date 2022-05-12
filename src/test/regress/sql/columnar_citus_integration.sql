@@ -186,11 +186,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 19);
+ALTER TABLE table_option_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 19);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
@@ -283,11 +283,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_reference_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_reference_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 9);
+ALTER TABLE table_option_reference_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 9);
 SELECT create_reference_table('table_option_reference_2');
 
 -- verify settings on placements
@@ -383,11 +383,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_citus_local_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_citus_local_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 9);
+ALTER TABLE table_option_citus_local_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 9);
 SELECT citus_add_local_table_to_metadata('table_option_citus_local_2');
 
 -- verify settings on placements
