@@ -2132,7 +2132,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	{
 		CreateStmt *createStmt = castNode(CreateStmt, parsetree);
 		if (createStmt->accessMethod != NULL &&
-			!strcmp(createStmt->accessMethod, "columnar"))
+			!strcmp(createStmt->accessMethod, COLUMNAR_AM_NAME))
 		{
 			columnarRangeVar = createStmt->relation;
 			createStmt->options = ExtractColumnarRelOptions(createStmt->options,
@@ -2144,7 +2144,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		CreateTableAsStmt *createTableAsStmt = castNode(CreateTableAsStmt, parsetree);
 		IntoClause *into = createTableAsStmt->into;
 		if (into->accessMethod != NULL &&
-			!strcmp(into->accessMethod, "columnar"))
+			!strcmp(into->accessMethod, COLUMNAR_AM_NAME))
 		{
 			columnarRangeVar = into->rel;
 			into->options = ExtractColumnarRelOptions(into->options,
@@ -2156,8 +2156,11 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, parsetree);
 		bool toColumnar = false;
 
-		Relation rel = relation_openrv(alterTableStmt->relation, AccessShareLock);
-		bool isColumnar = (rel->rd_tableam == GetColumnarTableAmRoutine());
+		Relation rel = relation_openrv_extended(alterTableStmt->relation, AccessShareLock,
+												alterTableStmt->missing_ok);
+
+		if (rel != NULL){
+		bool isColumnar = rel->rd_tableam == GetColumnarTableAmRoutine();
 
 		ListCell *lc;
 		foreach (lc, alterTableStmt->cmds)
@@ -2196,6 +2199,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		}
 
 		relation_close(rel, NoLock);
+		}
 	}
 
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
